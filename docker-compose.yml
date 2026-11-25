@@ -1,0 +1,14 @@
+services:
+  smit:
+    build: .
+    image: smit-cognitive-research:1.0.0
+    ports:
+      - "127.0.0.1:8000:8000"   # bound to localhost only; see docs/Security_and_Deployment.md before exposing
+    env_file: .env
+    environment:
+      SMIT_DATA_DIR: /data
+    volumes:
+      - smit-data:/data
+    restart: unless-stopped
+volumes:
+  smit-data:
