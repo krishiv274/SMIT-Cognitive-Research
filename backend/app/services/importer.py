@@ -120,9 +120,17 @@ def _read_xlsx(data: bytes) -> dict[str, pd.DataFrame]:
     import openpyxl  # defusedxml is installed, so openpyxl parses XML safely
 
     wb = openpyxl.load_workbook(io.BytesIO(data), read_only=True, data_only=True)
+    # Second, formula-preserving read: formulas are NEVER evaluated; a formula in a data cell is
+    # surfaced as text beginning with "=" so validation reports it explicitly.
+    wbf = openpyxl.load_workbook(io.BytesIO(data), read_only=True, data_only=False)
     out = {}
     for ws in wb.worksheets:
-        rows = list(ws.iter_rows(values_only=True))
+        rows = [list(r) for r in ws.iter_rows(values_only=True)]
+        frows = list(wbf[ws.title].iter_rows(values_only=True))
+        for i, fr in enumerate(frows[1:len(rows)], start=1):
+            for j, fv in enumerate(fr[: len(rows[i])]):
+                if isinstance(fv, str) and fv.startswith("="):
+                    rows[i][j] = fv
         if not rows:
             continue
         header = [str(h).strip() if h is not None else "" for h in rows[0]]
@@ -130,6 +138,7 @@ def _read_xlsx(data: bytes) -> dict[str, pd.DataFrame]:
         df = pd.DataFrame(body, columns=header) if body else pd.DataFrame(columns=header)
         out[ws.title] = _clean_frame(df)
     wb.close()
+    wbf.close()
     return out
 
 

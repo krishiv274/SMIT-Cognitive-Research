@@ -146,6 +146,7 @@ export default function ExperimentScreen({ config, plan, start, refresh, queue, 
         if (cancelled) return;
         const runner = new TrialRunner(trial, config, renderer, browserClock, {
           practice: step.practice, practiceAttempt: practiceAttempt.current, frameMs: refresh.frameMs, refreshHz: refresh.hz,
+          onPhase: (ph) => { const el = canvas.parentElement; if (el) el.dataset.phase = `${trial.condition}:${ph}`; },
         });
         runnerRef.current = runner;
         const result = await runner.run();

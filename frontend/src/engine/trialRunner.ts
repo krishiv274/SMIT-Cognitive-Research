@@ -34,6 +34,8 @@ export interface TrialRunnerOptions {
   practiceAttempt?: number;
   frameMs: number;
   refreshHz: number;
+  /** Optional observer (e.g. sets a data attribute for automated tests). Must be cheap. */
+  onPhase?: (phase: string) => void;
 }
 
 export function buildPhases(trial: PlanTrial, cfg: ExperimentConfig, practice: boolean): Phase[] {
@@ -146,6 +148,7 @@ export class TrialRunner {
   }
 
   private draw(phase: Phase): void {
+    this.opts.onPhase?.(phase.name);
     const r = this.renderer;
     const g = this.cfg.grid;
     const keys = this.cfg.keys;

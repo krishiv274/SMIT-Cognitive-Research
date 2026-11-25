@@ -4,6 +4,7 @@ const PORT = Number(process.env.SMIT_E2E_PORT ?? 8765);
 
 export default defineConfig({
   testDir: "./tests",
+  globalSetup: "./tests/global-setup.ts",
   timeout: 15 * 60_000,
   expect: { timeout: 15_000 },
   fullyParallel: false,

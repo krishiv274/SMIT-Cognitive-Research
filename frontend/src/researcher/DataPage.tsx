@@ -68,7 +68,7 @@ export default function DataPage() {
             className={cx("flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-8 text-center", drag ? "border-blue-600 bg-blue-50 dark:bg-blue-950" : "border-slate-300 dark:border-slate-700")}>
             <p className="font-semibold">Drag & drop the completed workbook here</p>
             <p className="mt-1 text-sm text-slate-500">.xlsx workbook, or several .csv files together (participants + sessions + trials), or a SMIT .json export. Max 15 MB.</p>
-            <input ref={input} type="file" multiple accept=".xlsx,.csv,.json" className="hidden" data-testid="file-input" onChange={(e) => e.target.files && upload(e.target.files)} />
+            <input ref={input} type="file" multiple accept=".xlsx,.csv,.json" className="hidden" data-testid="file-input" onChange={(e) => { const fl = e.target.files ? Array.from(e.target.files) : []; e.target.value = ""; void upload(fl); }} />
             <Button className="mt-4" variant="secondary" disabled={busy} onClick={() => input.current?.click()}>{busy ? "Validating…" : "Choose files"}</Button>
           </div>
           {err && <div className="mt-4"><Alert kind="error">{err}</Alert></div>}
