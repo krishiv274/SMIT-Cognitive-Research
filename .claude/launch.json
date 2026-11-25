@@ -1,6 +1,0 @@
-{
-  "version": "0.0.1",
-  "configurations": [
-    { "name": "smit", "runtimeExecutable": "/Users/Krishiv/Desktop/SMIT-Cognitive-Research/scripts/start.sh", "runtimeArgs": [], "port": 8000 }
-  ]
-}
