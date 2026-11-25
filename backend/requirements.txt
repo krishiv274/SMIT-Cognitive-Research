@@ -1,0 +1,23 @@
+# SMIT backend — pinned, tested with Python 3.14.2 (Python >= 3.11 supported)
+# Web API
+fastapi==0.165.0
+uvicorn==0.54.0
+pydantic==2.14.4
+pydantic-settings==2.16.3
+python-multipart==0.0.34
+# Database
+SQLAlchemy==2.1.9
+alembic==1.20.1
+# Data and statistics
+numpy==2.5.5
+pandas==3.1.1
+scipy==1.18.1
+statsmodels==0.15.0
+pingouin==0.7.0
+# Figures and documents
+matplotlib==3.11.2
+openpyxl==3.1.5
+defusedxml==0.7.1
+python-docx==1.2.0
+python-pptx==1.0.2
+reportlab==5.1.1

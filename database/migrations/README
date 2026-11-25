@@ -1,0 +1,12 @@
+# Database migrations (Alembic)
+
+The application creates missing tables automatically at start-up (`Base.metadata.create_all`).
+These Alembic migrations exist for controlled schema upgrades, e.g. when moving to PostgreSQL:
+
+```bash
+cd backend
+../.venv/bin/alembic upgrade head          # apply
+../.venv/bin/alembic revision --autogenerate -m "describe change"
+```
+
+The URL is taken from `SMIT_DATABASE_URL` (or `SMIT_DATA_DIR`).
