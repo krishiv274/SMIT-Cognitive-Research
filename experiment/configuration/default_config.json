@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "name": "SMIT default configuration (pre-pilot)",
+  "description": "Initial design parameters from the project specification. These values MUST be reviewed during human pilot testing and then locked before the main study begins.",
+  "grid": {
+    "size": 3,
+    "highlight_count": 4,
+    "cell_size_px": 110,
+    "cell_gap_px": 10,
+    "background_color": "#808080",
+    "cell_color": "#FFFFFF",
+    "memory_highlight_color": "#1F3A93",
+    "visual_interference_highlight_color": "#B35900",
+    "grid_border_color": "#404040"
+  },
+  "timing": {
+    "fixation_ms": 500,
+    "memory_stimulus_ms": 500,
+    "post_stimulus_blank_ms": 0,
+    "interference_ms": 3000,
+    "retention_ms": 1000,
+    "recognition_deadline_ms": 2000,
+    "iti_min_ms": 800,
+    "iti_max_ms": 1200,
+    "practice_feedback_ms": 1500,
+    "break_min_s": 20
+  },
+  "trials": {
+    "practice_per_condition": 2,
+    "trials_per_condition": 20,
+    "same_proportion": 0.5,
+    "max_same_answer_run": 3,
+    "change_type": "any",
+    "max_practice_repeats": 2
+  },
+  "secondary_tasks": {
+    "numerical": {
+      "operand_min": 2,
+      "operand_max": 9,
+      "operation": "addition",
+      "false_offsets": [-2, -1, 1, 2],
+      "true_proportion": 0.5
+    },
+    "visual": {
+      "probe": "symmetry",
+      "highlight_count": 4,
+      "true_proportion": 0.5
+    }
+  },
+  "keys": {
+    "same": "f",
+    "different": "j",
+    "secondary_true": "f",
+    "secondary_false": "j",
+    "continue": " "
+  },
+  "analysis": {
+    "alpha": 0.05,
+    "min_valid_rt_ms": 200,
+    "timing_tolerance_extra_ms": 5,
+    "max_memory_stimulus_deviation_frames": 1,
+    "max_other_phase_deviation_ms": 50,
+    "min_valid_trials_per_condition": 15,
+    "max_timeout_rate": 0.25,
+    "max_same_key_proportion": 0.9,
+    "min_secondary_accuracy": 0.6,
+    "ies_min_accuracy": 0.6,
+    "min_group_size_for_inference": 5,
+    "normality_alpha": 0.05
+  }
+}
