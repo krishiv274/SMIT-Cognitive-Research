@@ -23,6 +23,6 @@ for key, planned, label in (("fix", 500, "Fixation"), ("mem", 500, "Memory stimu
 iti = np.array([t["iti"] - t["planned_iti"] for t in tr if t["iti"] is not None], float)
 print(f"| ITI (measured − planned jittered value) | 800–1200 | {len(iti)} | {iti.mean():+.1f} | {iti.std(ddof=1):.2f} | {iti.min():+.1f} | {iti.max():+.1f} | — | — | — |")
 rts = [t["rt"] for t in main if t["rt"] is not None]
-print(f"\n- Recognition responses recorded: {len(rts)}/{len(main)}; automated key presses were scheduled ~350–710 ms after detecting probe onset; recorded RT range {min(rts):.0f}–{max(rts):.0f} ms")
+print(f"\n- Recognition responses recorded: {len(rts)}/{len(main)}; automated key presses were scheduled ~400–720 ms after detecting probe onset; recorded RT range {min(rts):.0f}–{max(rts):.0f} ms")
 print(f"- Secondary responses recorded on {sum(t['sec'] is not None for t in main if t['cond'] != 'A')}/{sum(t['cond'] != 'A' for t in main)} interference trials")
 print(f"- Dropped-frame events: {sum((t['dropped'] or 0) for t in tr)} across {sum(1 for t in tr if t['dropped'])} trials")

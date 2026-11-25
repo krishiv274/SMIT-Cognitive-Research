@@ -44,7 +44,7 @@ const AUTOPILOT = `
       return;
     }
     last = "";
-    for (const t of ["Start", "Start block", "Start the main task", "Continue"]) { const b = btn(t); if (b) { b.click(); return; } }
+    for (const t of ["Start", "Start block", "Continue"]) { const b = btn(t); if (b) { b.click(); return; } }
   }, 30);
 })();`;
 
@@ -90,9 +90,8 @@ test("full-length dry run of the default configuration with timing log and scree
   await page.waitForFunction(() => document.body.innerText.includes("Practice complete"), null, { timeout: 120_000, polling: 20 });
   await page.evaluate(() => { (window as any).__smitPause = true; });
   await shot(page, "14_practice_complete");
-  await page.evaluate(() => { (window as any).__smitPause = false; });
-  await page.waitForFunction(() => document.body.innerText.includes("Block 1 of 3"), null, { timeout: 60_000, polling: 20 });
-  await page.evaluate(() => { (window as any).__smitPause = true; });
+  await page.getByRole("button", { name: "Start the main task" }).click();
+  await expect(page.getByText(/Block 1 of 3/)).toBeVisible();
   await shot(page, "15_block_instructions");
   await page.evaluate(() => { (window as any).__smitPause = false; });
   await page.waitForFunction(() => document.body.innerText.includes("Short break"), null, { timeout: 6 * 60_000, polling: 100 });
@@ -122,13 +121,13 @@ test("full-length dry run of the default configuration with timing log and scree
   await admin.getByRole("button", { name: "Sign in" }).click();
   await expect(admin.getByRole("heading", { name: "Overview" })).toBeVisible();
   await shot(admin, "20_dashboard_overview");
-  await admin.getByRole("link", { name: "Configuration" }).click();
-  await expect(admin.getByText("Versions")).toBeVisible();
+  await admin.getByRole("navigation").getByRole("link", { name: "Configuration" }).click();
+  await expect(admin.getByRole("heading", { name: "Versions" })).toBeVisible();
   await shot(admin, "21_dashboard_configuration");
-  await admin.getByRole("link", { name: "Pilot mode" }).click();
+  await admin.getByRole("navigation").getByRole("link", { name: "Pilot mode" }).click();
   await admin.getByRole("button", { name: "Inspect" }).first().click();
   await expect(admin.getByText("Timing (measured − planned, ms)")).toBeVisible();
   await shot(admin, "22_dashboard_pilot_timing");
-  await admin.getByRole("link", { name: "Import / Export" }).click();
+  await admin.getByRole("navigation").getByRole("link", { name: "Import / Export" }).click();
   await shot(admin, "23_dashboard_import");
 });
