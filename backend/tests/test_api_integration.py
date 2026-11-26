@@ -191,3 +191,16 @@ def test_security_headers_and_settings(client, admin_headers):
     assert s["university_name"] == "Test University" and "unknown_key" not in s
     assert client.get("/api/public/study").json()["settings"]["university_name"] == "Test University"
     assert "pilot_observations" not in client.get("/api/public/study").json()["settings"]
+
+
+def test_login_lockout_after_repeated_failures(client, monkeypatch):
+    from app.api import admin as admin_api
+
+    monkeypatch.setattr(admin_api.time, "sleep", lambda s: None)
+    admin_api._FAILED_LOGINS.clear()
+    for _ in range(admin_api.MAX_FAILED_LOGINS):
+        assert client.post("/api/admin/login", json={"password": "guess"}).status_code == 401
+    assert client.post("/api/admin/login", json={"password": "guess"}).status_code == 429
+    assert client.post("/api/admin/login", json={"password": "test-password"}).status_code == 429, "locked even for the right password"
+    admin_api._FAILED_LOGINS.clear()
+    assert client.post("/api/admin/login", json={"password": "test-password"}).status_code == 200

@@ -41,9 +41,19 @@ router = APIRouter(prefix="/api/admin", tags=["researcher"])
 TARGET_N = 20
 
 
+_FAILED_LOGINS: list[float] = []
+MAX_FAILED_LOGINS = 10          # within LOCKOUT_WINDOW_S
+LOCKOUT_WINDOW_S = 15 * 60
+
+
 @router.post("/login")
 def login(data: LoginIn) -> dict:
+    now = time.time()
+    _FAILED_LOGINS[:] = [t for t in _FAILED_LOGINS if now - t < LOCKOUT_WINDOW_S]
+    if len(_FAILED_LOGINS) >= MAX_FAILED_LOGINS:
+        raise HTTPException(429, "Too many failed login attempts. Researcher login is locked for 15 minutes.")
     if not check_admin_password(data.password):
+        _FAILED_LOGINS.append(now)
         time.sleep(0.8)  # slow down brute force
         raise HTTPException(401, "Incorrect password")
     return {"token": issue_admin_token(), "default_password_in_use": get_settings().using_default_password}

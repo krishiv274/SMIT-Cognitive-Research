@@ -63,6 +63,24 @@ It prints the link to share, for example `http://10.7.20.10:8000/participate`. (
 - It does **not** work if the other person is on a **different network** (e.g. their home Wi-Fi or mobile data), and some college/guest Wi-Fi networks block computers from talking to each other.
 - **Research note:** the design assumes everyone uses the **same computer and keyboard**. If participants use their own laptops, timing and screen size will differ — mention this as a limitation in the report.
 
+### Letting people on OTHER networks open it (online link)
+
+For people at home, on mobile data, or anywhere else:
+
+```bash
+cd ~/Desktop/SMIT-Cognitive-Research && ./scripts/start_online.sh
+```
+
+After a few seconds it prints a link like `https://some-random-words.trycloudflare.com/participate` — **send that link to participants**. Anyone, on any network, can open it.
+
+- **The link changes every time you start it.** If you restart, send the new link.
+- Your Mac must stay **on and connected to the internet**, with that window open (the script stops the Mac from going to sleep while it runs; keep the lid open / charger plugged in).
+- All data is still saved **only on your Mac**. The connection is encrypted (HTTPS) and passes through Cloudflare's free tunnel service.
+- Because the dashboard is now reachable from the internet, use a **strong researcher password (12+ characters)** in `.env`. After 10 wrong password attempts, login locks for 15 minutes.
+- Update **Settings → Data storage statement** so participants know: *"Data are stored on the researchers' computer; the connection is encrypted and passes through Cloudflare's tunnel service."*
+- Tell participants to use **Chrome or Edge on a laptop/desktop** (not a phone), keep the tab in front, and use full screen.
+- Needs the free `cloudflared` tool once: `brew install cloudflared` (already installed on this Mac).
+
 ## 4. The procedure — step by step
 
 ### Step 1 — Fill in your details (5 minutes)

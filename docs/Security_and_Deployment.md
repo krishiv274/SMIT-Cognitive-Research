@@ -29,6 +29,10 @@ SMIT is designed to run on **one testing computer** with the server bound to `12
 
 Set the retention dates in *Settings* (shown in the consent form). At the end of the retention period: export the de-identified dataset needed for assessment, delete contacts (Participants → Delete or delete `data/smit.db`), and delete backups.
 
+## Quick online access: Cloudflare quick tunnel (implemented)
+
+`scripts/start_online.sh` keeps the app bound to `127.0.0.1` and publishes it through a free Cloudflare quick tunnel (`cloudflared`), giving a random `https://….trycloudflare.com` link. It refuses to start with default secrets, warns about short passwords, keeps the Mac awake, and stops the server when the window is closed. Data stay on the Mac; traffic is HTTPS and passes through Cloudflare. Researcher login locks for 15 minutes after 10 failed attempts. The link changes on every start, and quick tunnels have no uptime guarantee — suitable for a short student study, not for long-term hosting.
+
 ## If online testing is required
 
 Online testing reduces timing control (different devices/browsers) and adds security obligations. Only do so with your institution's approval.
