@@ -43,9 +43,25 @@ cd ~/Desktop/SMIT-Cognitive-Research && ./scripts/start.sh
 Leave that window open. Then, in Chrome, go to **http://127.0.0.1:8000**
 
 - **Take part** → the game (for participants)
-- **Researcher dashboard** → for you (password: `change-me-now`)
+- **Researcher dashboard** → for you (the password you set in `.env`)
 
 To stop the app, press `Ctrl + C` in the Terminal window.
+
+### Letting other computers open it (same Wi-Fi)
+
+`start.sh` only works on **your** computer. To let other laptops on the **same Wi-Fi / network** open the test, use this instead:
+
+```bash
+cd ~/Desktop/SMIT-Cognitive-Research && ./scripts/start_network.sh
+```
+
+It prints the link to share, for example `http://10.7.20.10:8000/participate`. (The number is your computer's network address and can change when you change Wi-Fi — always use the link it prints.)
+
+- Your computer must stay **on, awake and running** that window while people take the test. All data is still saved only on your computer.
+- You must have set your own password in `.env` first (it refuses to start with `change-me-now`).
+- If macOS asks "Allow incoming network connections?", click **Allow**.
+- It does **not** work if the other person is on a **different network** (e.g. their home Wi-Fi or mobile data), and some college/guest Wi-Fi networks block computers from talking to each other.
+- **Research note:** the design assumes everyone uses the **same computer and keyboard**. If participants use their own laptops, timing and screen size will differ — mention this as a limitation in the report.
 
 ## 4. The procedure — step by step
 

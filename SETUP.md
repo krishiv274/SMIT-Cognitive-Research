@@ -44,6 +44,16 @@ powershell -ExecutionPolicy Bypass -File scripts\setup.ps1
 powershell -ExecutionPolicy Bypass -File scripts\start.ps1
 ```
 
+## Letting other computers on the same network connect
+
+`start.sh` listens only on this computer (127.0.0.1). To allow other computers on the same Wi-Fi/LAN:
+
+```bash
+./scripts/start_network.sh
+```
+
+It binds to all network interfaces, prints the shareable link (e.g. `http://<your-ip>:8000/participate`) and refuses to run while the default researcher password is in use. Data stay on this computer. Computers on other networks cannot reach it; for that you would need an online deployment (see `docs/Security_and_Deployment.md`).
+
 ## Docker (optional)
 
 ```bash
