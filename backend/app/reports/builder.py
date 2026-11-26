@@ -70,7 +70,7 @@ def title_page(doc: Document, settings: dict, final: bool, results: dict | None)
             Para(" ", "center"))
     rows = [["University", _settings_val(settings, "university_name")], ["Department", _settings_val(settings, "department")],
             ["Course", _settings_val(settings, "course_name")], ["Student names", _settings_val(settings, "student_names")],
-            ["Student IDs", _settings_val(settings, "student_ids")], ["Professor", _settings_val(settings, "professor_name")],
+            ["Professor", _settings_val(settings, "professor_name")],
             ["Submission date", _settings_val(settings, "submission_date")],
             ["Report generated", date.today().isoformat()]]
     if results:

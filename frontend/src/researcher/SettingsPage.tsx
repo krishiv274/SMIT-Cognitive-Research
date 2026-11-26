@@ -4,7 +4,7 @@ import { Alert, Button, Card, Field, inputCls } from "../components/ui";
 import { PageTitle, useLoad } from "./ResearcherApp";
 
 const GROUPS: { title: string; note?: string; keys: [string, string, boolean?][] }[] = [
-  { title: "Report title page", keys: [["university_name", "University"], ["department", "Department"], ["course_name", "Course name"], ["student_names", "Student names"], ["student_ids", "Student IDs"], ["professor_name", "Professor"], ["submission_date", "Submission date"]] },
+  { title: "Report title page", keys: [["university_name", "University"], ["department", "Department"], ["course_name", "Course name"], ["student_names", "Student names"], ["professor_name", "Professor"], ["submission_date", "Submission date"]] },
   { title: "Consent form & contact (shown to participants)", note: "Never state that institutional ethics approval was granted unless it actually was.", keys: [["researcher_contact", "Researcher contact email"], ["supervisor_contact", "Supervisor contact email"], ["ethics_statement", "Ethics status statement", true], ["withdrawal_deadline", "Data-withdrawal deadline"], ["data_storage_statement", "Data storage statement", true], ["retention_statement", "Data retention statement", true]] },
   { title: "Method details for the report", keys: [["apparatus", "Apparatus (computer, OS, browser, monitor, keyboard)", true], ["recruitment_description", "Recruitment description", true]] },
   { title: "Human pilot testing (written by the research team)", note: "Record genuine human pilot observations only. Automated software tests are reported separately and are not pilot testing.", keys: [["pilot_observations", "Pilot observations", true], ["pilot_design_changes", "Design changes made after piloting", true]] },

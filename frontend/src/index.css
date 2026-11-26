@@ -7,6 +7,21 @@
 }
 
 html, body, #root { height: 100%; }
+
+/* Dark mode = true black theme: remap the slate scale to neutral greys on a black base */
+.dark {
+  color-scheme: dark;
+  --color-slate-950: #000000;
+  --color-slate-900: #0a0a0a;
+  --color-slate-800: #1f1f1f;
+  --color-slate-700: #333333;
+  --color-slate-600: #555555;
+  --color-slate-500: #808080;
+  --color-slate-400: #a6a6a6;
+  --color-slate-300: #cccccc;
+  --color-slate-200: #e5e5e5;
+  --color-slate-100: #f2f2f2;
+}
 body { @apply bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 antialiased; }
 
 /* Experiment stage: fixed, neutral, no animations or decoration */

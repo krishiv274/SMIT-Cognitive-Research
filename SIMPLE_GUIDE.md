@@ -50,7 +50,7 @@ To stop the app, press `Ctrl + C` in the Terminal window.
 ## 4. The procedure — step by step
 
 ### Step 1 — Fill in your details (5 minutes)
-Dashboard → **Settings**. Type your university, your names, student IDs, professor's name and contact email. Click **Save**.
+Dashboard → **Settings**. Type your university, your names, professor's name and contact email. Click **Save**.
 
 ### Step 2 — Try it yourself (10 minutes)
 Dashboard → **Pilot mode** → **Start pilot session**. Play the whole game once so you know what participants will see. (Pilot data is kept separate and never counted.)

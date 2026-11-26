@@ -12,7 +12,6 @@ DEFAULT_SETTINGS: dict[str, str] = {
     "department": "[DEPARTMENT]",
     "course_name": "Cognitive Psychology",
     "student_names": "[STUDENT NAMES]",
-    "student_ids": "[STUDENT IDS]",
     "professor_name": "[PROFESSOR NAME]",
     "submission_date": "[SUBMISSION DATE]",
     "researcher_contact": "[RESEARCHER CONTACT EMAIL]",
