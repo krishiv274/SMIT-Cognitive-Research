@@ -16,6 +16,14 @@ export default function SessionDetail({ sessionId, onClose }: { sessionId: strin
   if (error) return <Alert kind="error">{error}</Alert>;
   if (!data) return <p>Loading session…</p>;
   const s = data.session;
+  const setStatus = async (status: "abandoned" | "incomplete") => {
+    const reason = window.prompt(`Reason for marking this session as ${status}:`, status === "abandoned" ? "Participant left before finishing" : "");
+    if (!reason || reason.trim().length < 3) return;
+    try {
+      await admin("POST", `/sessions/${sessionId}/status`, { completion_status: status, reason });
+      reload();
+    } catch (e) { setMsg(e instanceof Error ? e.message : String(e)); }
+  };
   const toggle = async (t: TrialRow) => {
     const reason = window.prompt(t.exclusion_status === "excluded" ? "Reason for re-including this trial:" : "Documented reason for excluding this trial:");
     if (!reason || reason.trim().length < 3) return;
@@ -34,6 +42,12 @@ export default function SessionDetail({ sessionId, onClose }: { sessionId: strin
           .map(([k, v]) => <div key={String(k)}><dt className="text-xs text-slate-500">{String(k)}</dt><dd className="font-medium break-all">{String(v ?? "—")}</dd></div>)}
       </dl>
       <p className="mt-2 text-xs text-slate-500 break-all">Browser: {String(s.browser_information ?? "—")}</p>
+      {["registered", "in_progress", "incomplete"].includes(String(s.completion_status)) && (
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+          <span className="text-slate-500">This session is not finished.</span>
+          <Button variant="secondary" className="px-3 py-1 text-xs" onClick={() => setStatus("abandoned")}>Mark as abandoned</Button>
+        </div>
+      )}
       <h3 className="mt-5 font-semibold">Timing (measured − planned, ms)</h3>
       <div className="mt-2 flex flex-wrap gap-2 text-sm">
         {Object.entries(data.flags).map(([k, v]) => <Badge key={k} tone={k === "ok" ? "green" : k === "warning" ? "amber" : "red"}>{k}: {v}</Badge>)}

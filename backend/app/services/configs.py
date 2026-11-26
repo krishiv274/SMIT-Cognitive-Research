@@ -98,6 +98,24 @@ def lock_config(db: Session, row: ExperimentConfigVersion, justification: str) -
     return row
 
 
+def delete_config(db: Session, row: ExperimentConfigVersion, reason: str) -> dict:
+    """Permanently delete a configuration that no session has used.
+
+    Configurations that collected data (pilot or main) can never be deleted, because every
+    session must stay linked to the exact parameters it was run with.
+    """
+    used = db.scalar(select(func.count()).select_from(ExperimentSession).where(ExperimentSession.config_id == row.id))
+    if used:
+        raise HTTPException(409, f"{row.experiment_version} was used by {used} session(s) and cannot be deleted. "
+                                 "Delete those participants first, or keep the version for the record.")
+    info = {"experiment_version": row.experiment_version, "status": row.status, "was_active": row.is_active_main}
+    for child in db.scalars(select(ExperimentConfigVersion).where(ExperimentConfigVersion.parent_id == row.id)).all():
+        child.parent_id = None
+    db.delete(row)
+    audit(db, "config_deleted", entity_type="config", entity_id=info["experiment_version"], details={**info, "reason": reason})
+    return info
+
+
 def active_main_config(db: Session) -> ExperimentConfigVersion | None:
     return db.scalar(select(ExperimentConfigVersion).where(ExperimentConfigVersion.is_active_main))
 

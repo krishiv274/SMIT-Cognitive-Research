@@ -43,12 +43,28 @@ export default function ConfigPage() {
     if (json) {
       try { cfg = JSON.parse(jsonText); } catch { setMsg({ kind: "error", text: "JSON is not valid." }); return; }
     }
+    const params = (c: Record<string, any>) => JSON.stringify({ ...c, name: undefined, description: undefined });
+    if (asNew && params(cfg) === params(base.config)) {
+      setMsg({ kind: "warn", text: `Nothing was changed, so no new version was saved (it would duplicate ${base.experiment_version}). Change a parameter first, or use ${base.experiment_version} directly — pilot sessions can run on any version.` });
+      return;
+    }
     try {
       const r = asNew
         ? await admin<ConfigRow>("POST", "/configs", { config: cfg, notes, parent_id: base.id })
         : await admin<ConfigRow>("PUT", `/configs/${base.id}`, { config: cfg, notes });
       setMsg({ kind: "success", text: `Saved draft ${r.experiment_version}.` + (r.deviations_from_specification.length ? ` Deviations from specification: ${r.deviations_from_specification.join("; ")}` : "") });
       setEdit(null);
+      reload();
+    } catch (e) { setMsg({ kind: "error", text: e instanceof Error ? e.message : String(e) }); }
+  };
+
+  const remove = async (r: ConfigRow) => {
+    const typed = window.prompt(`Permanently delete ${r.experiment_version}${r.is_active_main ? " (the ACTIVE main-study configuration — the study will close)" : ""}?\n\nThis cannot be undone. Type the version ID to confirm:`);
+    if (typed === null) return;
+    try {
+      await admin("DELETE", `/configs/${r.id}`, { reason: "Deleted by the research team from the dashboard", confirm_version: typed.trim() });
+      setMsg({ kind: "success", text: `${r.experiment_version} was permanently deleted.` });
+      if (base?.id === r.id) setEdit(null);
       reload();
     } catch (e) { setMsg({ kind: "error", text: e instanceof Error ? e.message : String(e) }); }
   };
@@ -122,6 +138,7 @@ export default function ConfigPage() {
             <div className="flex gap-1">
               <Button variant="ghost" className="px-2 py-1" onClick={() => startEdit(r)}>{r.status === "draft" ? "Edit" : "Copy to draft"}</Button>
               {r.status === "draft" && <Button variant="ghost" className="px-2 py-1" onClick={() => setLockRow(r)}>Lock</Button>}
+              {r.sessions_using === 0 && <Button variant="ghost" className="px-2 py-1 text-red-700 dark:text-red-400" onClick={() => remove(r)}>Delete</Button>}
             </div>,
           ])} />
       </Card>

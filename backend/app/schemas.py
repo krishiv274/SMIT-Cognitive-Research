@@ -131,6 +131,11 @@ class ConfigIn(BaseModel):
     parent_id: int | None = None
 
 
+class ConfigDeleteIn(BaseModel):
+    reason: str = Field(min_length=3, max_length=2000)
+    confirm_version: str = Field(max_length=64)
+
+
 class LockIn(BaseModel):
     justification: str = Field(min_length=10, max_length=4000)
 

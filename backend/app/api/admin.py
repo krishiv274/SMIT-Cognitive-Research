@@ -20,6 +20,7 @@ from ..models import (
     Trial,
 )
 from ..schemas import (
+    ConfigDeleteIn,
     ConfigIn,
     DeleteIn,
     LockIn,
@@ -289,6 +290,18 @@ def update_config(config_id: int, data: ConfigIn, db: Session = Depends(get_db))
     config_service.update_draft(db, row, cfg, data.notes)
     db.commit()
     return _cfg_out(row, db)
+
+
+@router.delete("/configs/{config_id}", dependencies=[AdminDep])
+def delete_config(config_id: int, data: ConfigDeleteIn, db: Session = Depends(get_db)) -> dict:
+    row = db.get(ExperimentConfigVersion, config_id)
+    if row is None:
+        raise HTTPException(404, "Configuration not found")
+    if data.confirm_version != row.experiment_version:
+        raise HTTPException(422, "Type the version ID exactly to confirm deletion")
+    info = config_service.delete_config(db, row, data.reason)
+    db.commit()
+    return {"deleted": info}
 
 
 @router.post("/configs/{config_id}/lock", dependencies=[AdminDep])

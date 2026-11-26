@@ -21,12 +21,37 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.types import TypeDecorator
 
 from ..db import Base
 
 
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+class UTCDateTime(TypeDecorator):
+    """Timezone-aware UTC datetimes on every backend.
+
+    SQLite does not store time zones, so values came back "naive" and the dashboard
+    showed UTC times as if they were local time (5½ h early in India). Values are
+    stored as UTC and always returned with tzinfo=UTC.
+    """
+
+    impl = DateTime(timezone=True)
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return None
+        return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
 
 
 SESSION_TYPES = ("main", "pilot")
@@ -51,13 +76,13 @@ class Participant(Base):
     gender: Mapped[str | None] = mapped_column(String(40), nullable=True)
     academic_course: Mapped[str | None] = mapped_column(String(120), nullable=True)
     consent_status: Mapped[bool] = mapped_column(Boolean, default=False)
-    consent_timestamp: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    consent_timestamp: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     participant_type: Mapped[str] = mapped_column(String(10), default="main")
     status: Mapped[str] = mapped_column(String(20), default="active")
     status_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     data_source: Mapped[str] = mapped_column(String(20), default="app")  # app | import
     import_batch_id: Mapped[int | None] = mapped_column(ForeignKey("import_batches.id"), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
 
     contact: Mapped[ParticipantContact | None] = relationship(
         back_populates="participant", cascade="all, delete-orphan", uselist=False
@@ -81,7 +106,7 @@ class ParticipantContact(Base):
     )
     email: Mapped[str | None] = mapped_column(String(254), nullable=True)
     email_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
 
     participant: Mapped[Participant] = relationship(back_populates="contact")
 
@@ -101,8 +126,8 @@ class ExperimentConfigVersion(Base):
     parent_id: Mapped[int | None] = mapped_column(ForeignKey("experiment_configs.id"), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     lock_justification: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-    locked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    locked_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
 
 
 class ExperimentSession(Base):
@@ -130,8 +155,8 @@ class ExperimentSession(Base):
     browser_information: Mapped[str | None] = mapped_column(Text, nullable=True)
     screen_information: Mapped[str | None] = mapped_column(Text, nullable=True)
     estimated_refresh_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
-    start_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    completion_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    start_time: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    completion_time: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     completion_status: Mapped[str] = mapped_column(String(20), default="registered")
     token_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     practice_attempts: Mapped[int] = mapped_column(Integer, default=0)
@@ -140,8 +165,8 @@ class ExperimentSession(Base):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     data_source: Mapped[str] = mapped_column(String(20), default="app")
     import_batch_id: Mapped[int | None] = mapped_column(ForeignKey("import_batches.id"), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-    last_activity: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    last_activity: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
 
     participant: Mapped[Participant] = relationship(back_populates="sessions")
     trials: Mapped[list[Trial]] = relationship(back_populates="session", cascade="all, delete-orphan")
@@ -204,7 +229,7 @@ class Trial(Base):
     exclusion_status: Mapped[str] = mapped_column(String(10), default="included")
     exclusion_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     event_timestamps: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    timestamp: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
 
     session: Mapped[ExperimentSession] = relationship(back_populates="trials")
 
@@ -248,15 +273,15 @@ class ImportBatch(Base):
     n_participants: Mapped[int] = mapped_column(Integer, default=0)
     n_sessions: Mapped[int] = mapped_column(Integer, default=0)
     n_trials: Mapped[int] = mapped_column(Integer, default=0)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-    committed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    committed_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
 
 
 class AuditLog(Base):
     __tablename__ = "audit_logs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+    timestamp: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, index=True)
     actor: Mapped[str] = mapped_column(String(40))
     action: Mapped[str] = mapped_column(String(80), index=True)
     entity_type: Mapped[str | None] = mapped_column(String(40), nullable=True)
@@ -268,7 +293,7 @@ class AnalysisRun(Base):
     __tablename__ = "analysis_runs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
     status: Mapped[str] = mapped_column(String(20), default="completed")
     dataset_hash: Mapped[str] = mapped_column(String(64))
     n_participants_included: Mapped[int] = mapped_column(Integer, default=0)
@@ -284,7 +309,7 @@ class GeneratedReport(Base):
     __tablename__ = "generated_reports"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
     kind: Mapped[str] = mapped_column(String(20))  # preliminary | final | presentation
     analysis_run_id: Mapped[int | None] = mapped_column(ForeignKey("analysis_runs.id"), nullable=True)
     output_dir: Mapped[str] = mapped_column(Text)
@@ -296,4 +321,4 @@ class AppSetting(Base):
 
     key: Mapped[str] = mapped_column(String(80), primary_key=True)
     value: Mapped[str | None] = mapped_column(Text, nullable=True)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, onupdate=utcnow)

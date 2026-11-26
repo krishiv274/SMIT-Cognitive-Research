@@ -101,7 +101,7 @@ export default function PilotPage() {
         <div className="flex flex-wrap items-end gap-3">
           <label className="text-sm">Configuration
             <select className={inputCls.replace("w-full", "") + " mt-1 block w-full sm:w-80"} value={cfgId} onChange={(e) => setCfgId(e.target.value ? Number(e.target.value) : "")}>
-              <option value="">Latest draft (default)</option>
+              <option value="">Latest draft (or the active configuration if there is no draft)</option>
               {(configs.data ?? []).map((c) => <option key={c.id} value={c.id}>{c.experiment_version} — {c.status}</option>)}
             </select>
           </label>

@@ -244,3 +244,31 @@ def test_revoke_all_pilot_links(client, admin_headers):
     import time; time.sleep(0.01)
     new = client.post("/api/admin/pilot/launch", headers=admin_headers, json={}).json()["pilot_token"]
     assert client.get(f"/api/public/study?pilot_token={new}").status_code == 200, "links created after revoking work"
+
+
+def test_timestamps_are_returned_with_utc_timezone(client, admin_headers):
+    """SQLite drops time zones; API timestamps must still carry UTC so browsers show local time correctly."""
+    client.put("/api/admin/settings", headers=admin_headers, json={"course_name": "x"})
+    ts = client.get("/api/admin/audit", headers=admin_headers).json()[0]["timestamp"]
+    assert ts.endswith("+00:00") or ts.endswith("Z"), ts
+
+
+def test_delete_unused_configuration_only(client, admin_headers):
+    H = admin_headers
+    cfg = client.get("/api/admin/configs", headers=H).json()[0]
+    ver = cfg["experiment_version"]
+    body = {"reason": "test", "confirm_version": "wrong"}
+    assert client.request("DELETE", f"/api/admin/configs/{cfg['id']}", headers=H, json=body).status_code == 422
+    # once a session has used it, it can no longer be deleted
+    client.post(f"/api/admin/configs/{cfg['id']}/lock", headers=H, json={"justification": "lock for deletion test"})
+    client.post("/api/public/sessions", json=REG)
+    r = client.request("DELETE", f"/api/admin/configs/{cfg['id']}", headers=H, json={"reason": "test", "confirm_version": ver})
+    assert r.status_code == 409
+    # an unused draft can be deleted
+    base = client.get("/api/admin/configs/default", headers=H).json()
+    base["timing"]["fixation_ms"] = 600
+    d = client.post("/api/admin/configs", headers=H, json={"config": base}).json()
+    r = client.request("DELETE", f"/api/admin/configs/{d['id']}", headers=H, json={"reason": "not needed", "confirm_version": d["experiment_version"]})
+    assert r.status_code == 200
+    assert [c["id"] for c in client.get("/api/admin/configs", headers=H).json()] == [cfg["id"]]
+    assert any(a["action"] == "config_deleted" for a in client.get("/api/admin/audit", headers=H).json())
