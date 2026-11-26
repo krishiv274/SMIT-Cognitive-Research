@@ -138,7 +138,7 @@ export function PageTitle({ title, subtitle, actions }: { title: string; subtitl
         <h1 className="text-2xl font-bold">{title}</h1>
         {subtitle && <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">{subtitle}</p>}
       </div>
-      {actions}
+      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </div>
   );
 }

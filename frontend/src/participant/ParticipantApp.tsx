@@ -72,7 +72,9 @@ export default function ParticipantApp() {
         estimateRefreshRate().then((r) => alive && setRefresh({ hz: r.hz, frameMs: r.frameMs }));
         let active: ActiveSession | null = null;
         try { active = JSON.parse(store.getItem(ACTIVE_KEY) || "null"); } catch { active = null; }
-        if (active) { setStored(active); setStep("resume_prompt"); return; }
+        // Only offer to resume a session of the same kind as this link (a pilot session must not
+        // appear on the main-study link and vice versa). The other session stays stored.
+        if (active && active.session_type === st.mode) { setStored(active); setStep("resume_prompt"); return; }
         if (st.mode === "main" && !st.main_study_open) { setStep("closed"); return; }
         setStep("welcome");
       } catch (e) {

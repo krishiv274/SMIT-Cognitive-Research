@@ -25,8 +25,8 @@ export default function ParticipantsPage() {
   return (
     <>
       <PageTitle title="Participants" subtitle="Pseudonymous participants. Email addresses are hidden and every reveal/export is recorded in the audit log."
-        actions={<div className="flex gap-2">
-          <select className={inputCls + " w-auto"} value={scope} onChange={(e) => setScope(e.target.value)} aria-label="Scope">
+        actions={<div className="flex flex-wrap gap-2">
+          <select className={inputCls.replace("w-full", "") + " w-40"} value={scope} onChange={(e) => setScope(e.target.value)} aria-label="Scope">
             <option value="main">Main study</option><option value="pilot">Pilot</option><option value="all">All</option>
           </select>
           <Button variant="secondary" onClick={() => adminDownload(`/export?fmt=xlsx&scope=${scope}`, "export.xlsx")}>Export de-identified (.xlsx)</Button>

@@ -117,7 +117,7 @@ export default function ConfigPage() {
           rows={(data ?? []).map((r) => [
             <span className="font-mono text-xs">{r.experiment_version}</span>,
             r.is_active_main ? <Badge tone="green">locked · ACTIVE</Badge> : <Badge tone={r.status === "draft" ? "blue" : "slate"}>{r.status}</Badge>,
-            <span title={r.notes ?? ""}>{r.name}</span>, fmtDate(r.created_at), r.sessions_using,
+            <span title={r.notes ?? ""} className="block min-w-48 whitespace-normal">{r.name}</span>, fmtDate(r.created_at), r.sessions_using,
             r.deviations_from_specification.length ? <span className="text-xs">{r.deviations_from_specification.join("; ")}</span> : "none",
             <div className="flex gap-1">
               <Button variant="ghost" className="px-2 py-1" onClick={() => startEdit(r)}>{r.status === "draft" ? "Edit" : "Copy to draft"}</Button>

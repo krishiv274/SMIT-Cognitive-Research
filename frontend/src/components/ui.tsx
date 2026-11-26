@@ -70,6 +70,9 @@ export const inputCls =
   "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-slate-700 dark:bg-slate-950 dark:focus:ring-blue-900";
 
 export function Table({ head, rows, empty = "No data yet." }: { head: ReactNode[]; rows: ReactNode[][]; empty?: string }) {
+  if (rows.length === 0) {
+    return <div className="rounded-lg border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-500 dark:border-slate-700">{empty}</div>;
+  }
   return (
     <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
       <table className="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-800">

@@ -66,14 +66,21 @@ def create_app() -> FastAPI:
 
     dist: Path = s.frontend_dist
     if dist.exists():
-        @app.get("/{full_path:path}", include_in_schema=False)
+        @app.api_route("/{full_path:path}", methods=["GET", "HEAD"], include_in_schema=False)
         def spa(full_path: str):
             if full_path.startswith("api/"):
                 return JSONResponse({"detail": "Not found"}, status_code=404)
             target = (dist / full_path).resolve()
             if full_path and target.is_file() and dist.resolve() in target.parents:
-                return FileResponse(target)
-            return FileResponse(dist / "index.html")
+                # Hashed build assets never change → cache for a long time.
+                cache = ("public, max-age=31536000, immutable" if full_path.startswith("assets/")
+                         else "no-cache")
+                return FileResponse(target, headers={"Cache-Control": cache})
+            if full_path.startswith("assets/"):
+                # A missing asset must NOT fall back to index.html (wrong MIME type → blank page).
+                return JSONResponse({"detail": "Not found"}, status_code=404)
+            # The HTML shell must always be revalidated so browsers pick up new builds.
+            return FileResponse(dist / "index.html", headers={"Cache-Control": "no-cache, must-revalidate"})
 
     return app
 

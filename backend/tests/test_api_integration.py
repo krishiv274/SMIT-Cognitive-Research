@@ -204,3 +204,31 @@ def test_login_lockout_after_repeated_failures(client, monkeypatch):
     assert client.post("/api/admin/login", json={"password": "test-password"}).status_code == 429, "locked even for the right password"
     admin_api._FAILED_LOGINS.clear()
     assert client.post("/api/admin/login", json={"password": "test-password"}).status_code == 200
+
+
+def test_expired_or_invalid_pilot_link_gives_clear_message(client):
+    r = client.get("/api/public/study?pilot_token=not.valid")
+    assert r.status_code == 403 and "pilot link has expired" in r.json()["detail"]
+    r = client.post("/api/public/sessions", json={"consent": True, "session_type": "pilot", "pilot_token": "x.y"})
+    assert r.status_code == 403 and "pilot link" in r.json()["detail"]
+
+
+def test_spa_caching_rules(tmp_path, monkeypatch):
+    """index.html must be revalidated; hashed assets cached; missing assets 404 (never HTML)."""
+    from fastapi.testclient import TestClient
+
+    from app.main import create_app
+    from app.settings import get_settings
+
+    dist = tmp_path / "dist"
+    (dist / "assets").mkdir(parents=True)
+    (dist / "index.html").write_text("<html>app</html>")
+    (dist / "assets" / "index-abc.js").write_text("console.log(1)")
+    monkeypatch.setattr(get_settings(), "frontend_dist", dist)
+    with TestClient(create_app()) as c:
+        r = c.get("/researcher/participants")
+        assert r.status_code == 200 and "no-cache" in r.headers["cache-control"]
+        r = c.get("/assets/index-abc.js")
+        assert "immutable" in r.headers["cache-control"]
+        r = c.get("/assets/index-OLD.js")
+        assert r.status_code == 404 and "html" not in r.headers["content-type"]

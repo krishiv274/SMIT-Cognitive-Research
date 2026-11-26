@@ -34,7 +34,7 @@ export default function ReportsPage() {
         </Card>
       </div>
       {msg && <div className="mt-4"><Alert kind={msg.kind}>{msg.text}</Alert></div>}
-      <Alert kind="info"><span className="block mt-4">Automatically generated interpretations must be reviewed and approved by the research team before submission.</span></Alert>
+      <div className="mt-6"><Alert kind="info">Automatically generated interpretations must be reviewed and approved by the research team before submission.</Alert></div>
       <Card title="Generated files" className="mt-6">
         <Table head={["#", "Created", "Type", "Analysis run", "Files"]} empty="Nothing generated yet."
           rows={(list.data ?? []).map((r) => [r.id, fmtDate(r.created_at), <Badge tone={r.kind === "final" ? "green" : r.kind === "presentation" ? "blue" : "amber"}>{r.kind}</Badge>, r.analysis_run_id ?? "—",
