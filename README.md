@@ -4,6 +4,8 @@
 
 A complete, locally-run research application for a university Cognitive Psychology project: a frame-synchronised cognitive task, a researcher dashboard, Excel/CSV data import, a pre-specified statistical analysis pipeline, and automatic generation of the research report, results workbook and presentation.
 
+> **New here? Read [SIMPLE_GUIDE.md](SIMPLE_GUIDE.md) first.**
+
 > **Status:** software complete and tested. **No participant data exist.** Human pilot testing, genuine data collection (≥ 20 participants) and review of the findings remain for the research team. Results sections of the report are marked *pending* until real data are analysed.
 
 ## Scientific purpose
