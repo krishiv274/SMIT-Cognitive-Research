@@ -232,3 +232,15 @@ def test_spa_caching_rules(tmp_path, monkeypatch):
         assert "immutable" in r.headers["cache-control"]
         r = c.get("/assets/index-OLD.js")
         assert r.status_code == 404 and "html" not in r.headers["content-type"]
+
+
+def test_revoke_all_pilot_links(client, admin_headers):
+    old = client.post("/api/admin/pilot/launch", headers=admin_headers, json={}).json()["pilot_token"]
+    assert client.get(f"/api/public/study?pilot_token={old}").status_code == 200
+    client.post("/api/admin/pilot/revoke-all", headers=admin_headers)
+    assert client.get(f"/api/public/study?pilot_token={old}").status_code == 403
+    r = client.post("/api/public/sessions", json={"consent": True, "session_type": "pilot", "pilot_token": old})
+    assert r.status_code == 403
+    import time; time.sleep(0.01)
+    new = client.post("/api/admin/pilot/launch", headers=admin_headers, json={}).json()["pilot_token"]
+    assert client.get(f"/api/public/study?pilot_token={new}").status_code == 200, "links created after revoking work"

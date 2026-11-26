@@ -11,7 +11,7 @@ from ..schemas import RegistrationIn, SessionEventIn, TrialBatchIn
 from ..security import check_session_token, verify_token
 from ..services import configs as config_service
 from ..services import sessions as session_service
-from ..services import settings_store
+from ..services import pilot_links, settings_store
 
 router = APIRouter(prefix="/api/public", tags=["participant"])
 
@@ -25,7 +25,7 @@ def study_info(pilot_token: str | None = None, db: Session = Depends(get_db)) ->
     active = config_service.active_main_config(db)
     pilot_cfg = None
     if pilot_token:
-        body = _pilot_token(pilot_token)
+        body = _pilot_token(pilot_token, db)
         pilot_cfg = db.get(ExperimentConfigVersion, body["config_id"])
     row = pilot_cfg or active
     cfg = ExperimentConfig.model_validate(row.config_json) if row else None
@@ -43,13 +43,19 @@ def study_info(pilot_token: str | None = None, db: Session = Depends(get_db)) ->
     }
 
 
-def _pilot_token(token: str) -> dict:
-    """Validate a pilot link token with a participant-friendly error message."""
+PILOT_LINK_INVALID = ("This pilot link has expired or is invalid. Please ask the researcher for a new "
+                      "pilot link (Dashboard → Pilot mode → Start pilot session).")
+
+
+def _pilot_token(token: str, db: Session) -> dict:
+    """Validate a pilot link token (signature, expiry, revocation) with a participant-friendly message."""
     try:
-        return verify_token(token, "pilot")
+        body = verify_token(token, "pilot")
     except HTTPException as exc:
-        raise HTTPException(403, "This pilot link has expired or is invalid. Please ask the researcher for a new "
-                                 "pilot link (Dashboard → Pilot mode → Start pilot session).") from exc
+        raise HTTPException(403, PILOT_LINK_INVALID) from exc
+    if pilot_links.is_revoked(db, body):
+        raise HTTPException(403, PILOT_LINK_INVALID)
+    return body
 
 
 def _get_session(db: Session, session_id: str, token: str | None) -> ExperimentSession:
@@ -64,7 +70,7 @@ def create_session(data: RegistrationIn, db: Session = Depends(get_db)) -> dict:
     if data.session_type == "pilot":
         if not data.pilot_token:
             raise HTTPException(403, "Pilot sessions must be launched from the researcher dashboard")
-        body = _pilot_token(data.pilot_token)
+        body = _pilot_token(data.pilot_token, db)
         row = db.get(ExperimentConfigVersion, body["config_id"])
         if row is None:
             raise HTTPException(404, "Pilot configuration not found")

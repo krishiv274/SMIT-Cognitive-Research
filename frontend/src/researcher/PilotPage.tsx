@@ -73,6 +73,15 @@ export default function PilotPage() {
       window.prompt("Copy this pilot link:", url);
     }
   };
+  const revokeAll = async () => {
+    if (!window.confirm("Revoke ALL pilot links? Every pilot link created so far (including links you sent to volunteers) will stop working. Pilot sessions already started are not affected.")) return;
+    try {
+      await admin("POST", "/pilot/revoke-all");
+      saveLinks([]);
+      setLinks([]);
+      setErr(null);
+    } catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
+  };
   const forget = (path: string) => {
     const next = loadLinks().filter((l) => l.path !== path);
     saveLinks(next);
@@ -98,6 +107,7 @@ export default function PilotPage() {
           </label>
           <Button onClick={launch}>Start pilot session (new tab)</Button>
           <Button variant="secondary" onClick={preview}>Preview stimuli</Button>
+          <Button variant="ghost" className="text-red-700 dark:text-red-400" onClick={revokeAll}>Revoke all pilot links</Button>
         </div>
         {links.length > 0 && (
           <div className="mt-4 space-y-2">

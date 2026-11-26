@@ -32,7 +32,7 @@ from ..schemas import (
 from ..security import AdminDep, check_admin_password, issue_admin_token, sign_token
 from ..services import configs as config_service
 from ..services import dataset as dataset_service
-from ..services import settings_store
+from ..services import pilot_links, settings_store
 from ..services.audit import audit
 from ..services.sessions import order_counts
 from ..settings import get_settings
@@ -323,10 +323,19 @@ def launch_pilot(data: PilotLaunchIn, db: Session = Depends(get_db)) -> dict:
         config_service.latest_draft(db) or config_service.active_main_config(db))
     if row is None:
         raise HTTPException(404, "No configuration available")
-    token = sign_token({"kind": "pilot", "config_id": row.id}, 6 * 3600)
+    token = sign_token({"kind": "pilot", "config_id": row.id, "iat": time.time()}, pilot_links.PILOT_TTL_S)
     audit(db, "pilot_launched", entity_type="config", entity_id=row.experiment_version)
     db.commit()
     return {"pilot_token": token, "url": f"/participate?pilot={token}", "experiment_version": row.experiment_version}
+
+
+@router.post("/pilot/revoke-all", dependencies=[AdminDep])
+def revoke_pilot_links(db: Session = Depends(get_db)) -> dict:
+    """Invalidate every pilot link issued so far (links already copied/sent stop working)."""
+    ts = pilot_links.revoke_all(db)
+    audit(db, "pilot_links_revoked", entity_type="pilot")
+    db.commit()
+    return {"revoked_at": ts}
 
 
 # ---------------------------------------------------------------------------
