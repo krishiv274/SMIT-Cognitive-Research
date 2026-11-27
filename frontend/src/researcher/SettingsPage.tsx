@@ -15,15 +15,29 @@ export default function SettingsPage() {
   const { data, error } = useLoad(() => admin<Record<string, string>>("GET", "/settings"));
   const [v, setV] = useState<Record<string, string>>({});
   const [msg, setMsg] = useState<{ kind: "success" | "error"; text: string } | null>(null);
-  useEffect(() => { if (data) setV(data); }, [data]);
+  const [saved, setSaved] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { if (data) { setV(data); setSaved(data); } }, [data]);
+  const dirty = Object.keys(v).some((k) => (v[k] ?? "") !== (saved[k] ?? ""));
+  // Warn before leaving the page with unsaved changes.
+  useEffect(() => {
+    if (!dirty) return;
+    const h = (e: BeforeUnloadEvent) => { e.preventDefault(); };
+    window.addEventListener("beforeunload", h);
+    return () => window.removeEventListener("beforeunload", h);
+  }, [dirty]);
   const save = async () => {
-    try { setV(await admin<Record<string, string>>("PUT", "/settings", v)); setMsg({ kind: "success", text: "Settings saved." }); }
+    setBusy(true);
+    try { const r = await admin<Record<string, string>>("PUT", "/settings", v); setV(r); setSaved(r); setMsg({ kind: "success", text: "Settings saved." }); }
     catch (e) { setMsg({ kind: "error", text: e instanceof Error ? e.message : String(e) }); }
+    finally { setBusy(false); }
   };
+  const set = (k: string, val: string) => { setV({ ...v, [k]: val }); if (msg?.kind === "success") setMsg(null); };
   if (error) return <Alert kind="error">{error}</Alert>;
+  if (!data) return <p>Loading…</p>;
   return (
     <>
-      <PageTitle title="Settings" subtitle="Institutional details, consent placeholders, report title page and pilot notes. Values in [brackets] are placeholders." actions={<Button onClick={save}>Save settings</Button>} />
+      <PageTitle title="Settings" subtitle="Institutional details, consent placeholders, report title page and pilot notes. Values in [brackets] are placeholders." actions={<>{dirty && <span className="text-sm text-amber-700 dark:text-amber-400">Unsaved changes</span>}<Button onClick={save} disabled={busy || !dirty}>{busy ? "Saving…" : "Save settings"}</Button></>} />
       {msg && <div className="mb-4"><Alert kind={msg.kind}>{msg.text}</Alert></div>}
       <div className="space-y-6">
         {GROUPS.map((g) => (
@@ -33,8 +47,8 @@ export default function SettingsPage() {
               {g.keys.map(([k, label, long]) => (
                 <div key={k} className={long ? "md:col-span-2" : ""}>
                   <Field label={label}>
-                    {long ? <textarea className={inputCls} rows={k.startsWith("pilot") ? 6 : 3} value={v[k] ?? ""} onChange={(e) => setV({ ...v, [k]: e.target.value })} />
-                      : <input className={inputCls} value={v[k] ?? ""} onChange={(e) => setV({ ...v, [k]: e.target.value })} />}
+                    {long ? <textarea className={inputCls} rows={k.startsWith("pilot") ? 6 : 3} value={v[k] ?? ""} onChange={(e) => set(k, e.target.value)} />
+                      : <input className={inputCls} value={v[k] ?? ""} onChange={(e) => set(k, e.target.value)} />}
                   </Field>
                 </div>
               ))}
@@ -42,7 +56,8 @@ export default function SettingsPage() {
           </Card>
         ))}
       </div>
-      <div className="mt-6"><Button onClick={save}>Save settings</Button></div>
+      {msg && <div className="mt-6"><Alert kind={msg.kind}>{msg.text}</Alert></div>}
+      <div className="mt-6 flex items-center gap-3"><Button onClick={save} disabled={busy || !dirty}>{busy ? "Saving…" : "Save settings"}</Button>{dirty && <span className="text-sm text-amber-700 dark:text-amber-400">Unsaved changes</span>}</div>
     </>
   );
 }

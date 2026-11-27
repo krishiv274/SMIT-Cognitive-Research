@@ -50,12 +50,17 @@ export async function completeParticipantFlow(page: Page, opts: { age: string; g
 
   const keys = ["f", "j"];
   let i = 0;
+  let sawNextBlockHelp = false;
   const deadline = Date.now() + 8 * 60_000;
   while (Date.now() < deadline) {
     if (await page.getByText("Thank you — you have finished!").isVisible()) break;
     if (await page.getByRole("button", { name: "Start the main task" }).isVisible()) {
       await page.getByRole("button", { name: "Start the main task" }).click();
       continue;
+    }
+    if (!sawNextBlockHelp && await page.getByTestId("next-block-instructions").isVisible()) {
+      sawNextBlockHelp = true;
+      await page.screenshot({ path: "../tests/artifacts/break_next_block_instructions.png" });
     }
     const cont = page.getByRole("button", { name: /^(Start|Start block|Continue)$/ });
     if (await page.getByTestId("stage").isVisible()) {
@@ -68,5 +73,6 @@ export async function completeParticipantFlow(page: Page, opts: { age: string; g
     }
   }
   await expect(page.getByText("Thank you — you have finished!")).toBeVisible();
+  expect(sawNextBlockHelp, "the break screen shows how the next block works").toBe(true);
   return pid;
 }

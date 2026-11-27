@@ -28,6 +28,7 @@ export default function OverviewPage() {
   if (error) return <Alert kind="error">{error}</Alert>;
   if (!data) return <p>Loading…</p>;
   const orders = Object.entries(data.condition_order_distribution);
+  const maxOrder = Math.max(0, ...orders.map((o) => o[1]));
   return (
     <>
       <PageTitle title="Overview" subtitle="Data-collection progress for the main study (pilot data are counted separately)." />
@@ -58,7 +59,8 @@ export default function OverviewPage() {
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
         <Card title="Condition-order distribution (counterbalancing)">
           <Plot data={[{ type: "bar", x: orders.map((o) => o[0]), y: orders.map((o) => o[1]), marker: { color: "#1F3A93" } }]}
-            layout={{ xaxis: { title: { text: "Block order" } }, yaxis: { title: { text: "Participants" }, dtick: 1 } }} height={260} />
+            layout={{ xaxis: { title: { text: "Block order" }, showgrid: false, fixedrange: true }, yaxis: { title: { text: "Participants" }, dtick: maxOrder > 10 ? undefined : 1, range: [0, Math.max(1, maxOrder) * 1.1], fixedrange: true } }} height={260} />
+          {maxOrder === 0 && <p className="mt-1 text-xs text-slate-500">No main-study sessions yet — orders are assigned as participants register.</p>}
         </Card>
         <Card title="Age distribution">
           {data.age_values.length ? (

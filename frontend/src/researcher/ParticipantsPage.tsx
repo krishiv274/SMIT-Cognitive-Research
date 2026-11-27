@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { admin, adminDownload } from "../api";
-import { Alert, Badge, Button, Card, Field, Table, inputCls } from "../components/ui";
+import { Alert, Badge, Button, Card, Field, Table, errText, inputCls } from "../components/ui";
 import { PageTitle, fmtDate, useLoad } from "./ResearcherApp";
 import SessionDetail from "./SessionDetail";
 
@@ -18,28 +18,30 @@ export default function ParticipantsPage() {
   const [msg, setMsg] = useState<{ kind: "error" | "success"; text: string } | null>(null);
 
   const reveal = async (pid: string) => {
-    const r = await admin<{ email: string | null }>("GET", `/participants/${pid}/contact`);
-    setContact((c) => ({ ...c, [pid]: r.email }));
+    try {
+      const r = await admin<{ email: string | null }>("GET", `/participants/${encodeURIComponent(pid)}/contact`);
+      setContact((c) => ({ ...c, [pid]: r.email }));
+    } catch (e) { setMsg({ kind: "error", text: errText(e) }); }
   };
 
   return (
     <>
       <PageTitle title="Participants" subtitle="Pseudonymous participants. Email addresses are hidden and every reveal/export is recorded in the audit log."
         actions={<div className="flex flex-wrap gap-2">
-          <select className={inputCls.replace("w-full", "") + " w-40"} value={scope} onChange={(e) => setScope(e.target.value)} aria-label="Scope">
+          <select className={inputCls.replace("w-full", "") + " w-40"} value={scope} onChange={(e) => { setScope(e.target.value); setAction(null); setSession(null); }} aria-label="Scope">
             <option value="main">Main study</option><option value="pilot">Pilot</option><option value="all">All</option>
           </select>
           <Button variant="secondary" onClick={() => adminDownload(`/export?fmt=xlsx&scope=${scope}`, "export.xlsx")}>Export de-identified (.xlsx)</Button>
-          <Button variant="secondary" onClick={() => window.confirm("Download the CONFIDENTIAL contact list? This action is logged.") && adminDownload("/contacts/export", "contacts.csv")}>Contacts (confidential)</Button>
+          <Button variant="secondary" onClick={() => { if (window.confirm("Download the CONFIDENTIAL contact list? This action is logged.")) void adminDownload("/contacts/export", "contacts.csv"); }}>Contacts (confidential)</Button>
         </div>} />
       {msg && <div className="mb-4"><Alert kind={msg.kind}>{msg.text}</Alert></div>}
       {error && <Alert kind="error">{error}</Alert>}
       {session && <div className="mb-6"><SessionDetail sessionId={session} onClose={() => setSession(null)} /></div>}
-      {action && <ActionPanel action={action} onDone={(t) => { setAction(null); setMsg({ kind: "success", text: t }); reload(); }} onCancel={() => setAction(null)} onError={(t) => setMsg({ kind: "error", text: t })} />}
+      {action && <ActionPanel key={action.kind + action.p.participant_id} action={action} onDone={(t) => { if (action.kind === "delete" && session && action.p.sessions.some((x) => x.session_id === session)) setSession(null); setAction(null); setMsg({ kind: "success", text: t }); reload(); }} onCancel={() => setAction(null)} onError={(t) => setMsg({ kind: "error", text: t })} />}
       <Card>
         <Table
           head={["ID", "Status", "Session", "Trials", "Order", "Age", "Gender", "Course", "Consent", "Source", "Contact", "Actions"]}
-          empty="No participants yet. Start the participant app or import a data file."
+          empty={scope === "pilot" ? "No pilot participants." : "No participants yet. Start the participant app or import a data file."}
           rows={(data ?? []).map((p) => {
             const s = p.sessions[p.sessions.length - 1];
             return [
@@ -53,8 +55,8 @@ export default function ParticipantsPage() {
               p.data_source,
               p.has_contact ? (contact[p.participant_id] !== undefined ? <span className="font-mono text-xs">{contact[p.participant_id]}</span> : <button className="text-xs text-blue-700 underline dark:text-blue-400" onClick={() => reveal(p.participant_id)}>reveal</button>) : "—",
               <div className="flex gap-1">
-                <Button variant="ghost" className="px-2 py-1" onClick={() => setAction({ kind: "status", p })}>Status</Button>
-                <Button variant="ghost" className="px-2 py-1 text-red-700" onClick={() => setAction({ kind: "delete", p })}>Delete</Button>
+                <Button variant="ghost" className="px-2 py-1" onClick={() => { setMsg(null); setAction({ kind: "status", p }); }}>Status</Button>
+                <Button variant="dangerGhost" className="px-2 py-1" onClick={() => { setMsg(null); setAction({ kind: "delete", p }); }}>Delete</Button>
               </div>,
             ];
           })}
@@ -69,21 +71,23 @@ function ActionPanel({ action, onDone, onCancel, onError }: { action: { kind: "s
   const [reason, setReason] = useState("");
   const [confirmId, setConfirmId] = useState("");
   const pid = action.p.participant_id;
+  const [busy, setBusy] = useState(false);
   const submit = async () => {
+    setBusy(true);
     try {
       if (action.kind === "status") {
-        await admin("POST", `/participants/${pid}/status`, { status, reason });
+        await admin("POST", `/participants/${pid}/status`, { status, reason: reason.trim() });
         onDone(`${pid} is now ${status}.`);
       } else {
-        await admin("DELETE", `/participants/${pid}`, { reason, confirm_participant_id: confirmId });
+        await admin("DELETE", `/participants/${pid}`, { reason: reason.trim(), confirm_participant_id: confirmId.trim() });
         onDone(`${pid} and all associated data were permanently deleted.`);
       }
     } catch (e) {
       onError(e instanceof Error ? e.message : String(e));
-    }
+    } finally { setBusy(false); }
   };
   return (
-    <Card title={action.kind === "status" ? `Change status of ${pid}` : `Permanently delete ${pid}`} className="mb-6 border-amber-400">
+    <Card reveal title={action.kind === "status" ? `Change status of ${pid}` : `Permanently delete ${pid}`} className="mb-6 border-amber-400">
       <div className="grid gap-4 md:grid-cols-3">
         {action.kind === "status" ? (
           <Field label="New status" hint="Excluded participants are kept but removed from analysis; withdrawn = consent withdrawn.">
@@ -99,7 +103,7 @@ function ActionPanel({ action, onDone, onCancel, onError }: { action: { kind: "s
         <div className="md:col-span-2"><Field label="Documented reason (required)"><input className={inputCls} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. participant requested withdrawal on 2026-12-03" /></Field></div>
       </div>
       <div className="mt-4 flex gap-2">
-        <Button variant={action.kind === "delete" ? "danger" : "primary"} disabled={reason.trim().length < 3 || (action.kind === "delete" && confirmId !== pid)} onClick={submit}>
+        <Button variant={action.kind === "delete" ? "danger" : "primary"} disabled={busy || reason.trim().length < 3 || (action.kind === "delete" && confirmId.trim() !== pid) || (action.kind === "status" && status === action.p.status)} onClick={submit}>
           {action.kind === "delete" ? "Delete permanently" : "Save status"}
         </Button>
         <Button variant="secondary" onClick={onCancel}>Cancel</Button>

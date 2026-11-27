@@ -24,13 +24,13 @@ export default function ReportsPage() {
     <>
       <PageTitle title="Reports & presentation" subtitle="Generates the academic report (PDF, DOCX, HTML), the statistical results workbook and the slide deck from the latest analysis run." />
       <div className="grid gap-6 md:grid-cols-2">
-        <Card title="Generate Research Report">
-          <p className="text-sm">Uses the most recent analysis run (run the analysis first if data changed). If no eligible genuine data exist, a <strong>preliminary protocol report</strong> is produced with results, discussion and conclusions marked as pending.</p>
-          <Button className="mt-4" onClick={() => gen("report")} disabled={!!busy}>{busy === "report" ? "Generating…" : "Generate Research Report"}</Button>
+        <Card title="Generate Research Report" className="flex flex-col">
+          <p className="flex-1 text-sm">Uses the most recent analysis run (run the analysis first if data changed). If no eligible genuine data exist, a <strong>preliminary protocol report</strong> is produced with results, discussion and conclusions marked as pending.</p>
+          <Button className="mt-4 self-start" onClick={() => gen("report")} disabled={!!busy}>{busy === "report" ? "Generating…" : "Generate Research Report"}</Button>
         </Card>
-        <Card title="Regenerate presentation">
-          <p className="text-sm">Rebuilds <code>SMIT_Presentation.pptx</code>; data-dependent slides (results, discussion, conclusion) are filled from the latest analysis run or marked as pending.</p>
-          <Button className="mt-4" variant="secondary" onClick={() => gen("presentation")} disabled={!!busy}>{busy === "presentation" ? "Generating…" : "Regenerate presentation"}</Button>
+        <Card title="Regenerate presentation" className="flex flex-col">
+          <p className="flex-1 text-sm">Rebuilds <code>SMIT_Presentation.pptx</code>; data-dependent slides (results, discussion, conclusion) are filled from the latest analysis run or marked as pending.</p>
+          <Button className="mt-4 self-start" variant="secondary" onClick={() => gen("presentation")} disabled={!!busy}>{busy === "presentation" ? "Generating…" : "Regenerate presentation"}</Button>
         </Card>
       </div>
       {msg && <div className="mt-4"><Alert kind={msg.kind}>{msg.text}</Alert></div>}

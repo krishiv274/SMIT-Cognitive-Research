@@ -90,7 +90,8 @@ def register(db: Session, data: RegistrationIn, config_row: ExperimentConfigVers
             device_information=json.dumps({k: v for k, v in data.device.model_dump().items()
                                            if k not in ("user_agent",)}),
             browser_information=(data.device.user_agent or "")[:500],
-            screen_information=f"{data.device.screen_width}x{data.device.screen_height}@{data.device.device_pixel_ratio}",
+            screen_information=(f"{data.device.screen_width}x{data.device.screen_height}@{data.device.device_pixel_ratio or 1}"
+                                if data.device.screen_width and data.device.screen_height else None),
             estimated_refresh_rate=data.device.estimated_refresh_rate,
             completion_status="registered", token_hash=token_hash,
         )
@@ -133,8 +134,13 @@ def save_trials(db: Session, session: ExperimentSession, trials: list[TrialIn]) 
     cfg = ExperimentConfig.model_validate(db.get(ExperimentConfigVersion, session.config_id).config_json)
     deadline = cfg.timing.recognition_deadline_ms
     saved, duplicates = [], []
+    seen: set[tuple] = set()
     for t in trials:
         key = (session.session_id, t.practice_trial, t.practice_attempt if t.practice_trial else 0, t.trial_number)
+        if key in seen:  # the same trial twice in one upload: keep the first copy
+            duplicates.append(t.trial_number)
+            continue
+        seen.add(key)
         exists = db.scalar(select(Trial.trial_id).where(
             Trial.session_id == key[0], Trial.practice_trial == key[1],
             Trial.practice_attempt == key[2], Trial.trial_number == key[3]))
@@ -218,8 +224,11 @@ def complete(db: Session, session: ExperimentSession) -> dict:
     prog = progress(db, session)
     n_saved, n_planned = len(prog["saved_main_trials"]), prog["n_main_planned"]
     if session.completion_status not in ("withdrawn", "abandoned"):
+        was_completed = session.completion_status == "completed"
         session.completion_status = "completed" if n_saved >= n_planned else "incomplete"
-        session.completion_time = utcnow()
+        # Calling /complete again (e.g. after a resume or retry) must not move the original completion time.
+        if not (was_completed and session.completion_time):
+            session.completion_time = utcnow()
     audit(db, "session_completed" if session.completion_status == "completed" else "session_incomplete",
           actor="participant", entity_type="session", entity_id=session.session_id,
           details={"main_trials_saved": n_saved, "planned": n_planned})

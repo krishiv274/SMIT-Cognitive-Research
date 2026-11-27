@@ -272,3 +272,83 @@ def test_delete_unused_configuration_only(client, admin_headers):
     assert r.status_code == 200
     assert [c["id"] for c in client.get("/api/admin/configs", headers=H).json()] == [cfg["id"]]
     assert any(a["action"] == "config_deleted" for a in client.get("/api/admin/audit", headers=H).json())
+
+
+def _new_pilot(client, admin_headers) -> str:
+    tok = client.post("/api/admin/pilot/launch", headers=admin_headers, json={}).json()["pilot_token"]
+    return client.post("/api/public/sessions", json={"consent": True, "session_type": "pilot", "pilot_token": tok}).json()["participant_id"]
+
+
+def test_delete_pilot_sessions_and_id_numbering(client, admin_headers):
+    H = admin_headers
+    assert [_new_pilot(client, H) for _ in range(3)] == ["PILOT-001", "PILOT-002", "PILOT-003"]
+    # deleting the newest pilot: numbering continues from the last kept ID
+    assert client.delete("/api/admin/pilot/participants/PILOT-003", headers=H).status_code == 200
+    assert _new_pilot(client, H) == "PILOT-003"
+    # deleting a middle one keeps the numbering after the highest remaining ID
+    client.delete("/api/admin/pilot/participants/PILOT-002", headers=H)
+    assert _new_pilot(client, H) == "PILOT-004"
+    # deleting all pilots restarts at PILOT-001
+    r = client.delete("/api/admin/pilot/participants", headers=H).json()
+    assert sorted(r["deleted"]) == ["PILOT-001", "PILOT-003", "PILOT-004"]
+    assert client.get("/api/admin/participants?scope=pilot", headers=H).json() == []
+    assert client.get("/api/admin/overview", headers=H).json()["pilot_sessions"] == 0
+    assert _new_pilot(client, H) == "PILOT-001"
+    assert "pilot_participants_deleted" in [a["action"] for a in client.get("/api/admin/audit", headers=H).json()]
+
+
+def test_pilot_delete_refuses_main_participants(client, admin_headers):
+    lock_default(client, admin_headers)
+    pid = client.post("/api/public/sessions", json=REG).json()["participant_id"]
+    assert client.delete(f"/api/admin/pilot/participants/{pid}", headers=admin_headers).status_code == 422
+    client.delete("/api/admin/pilot/participants", headers=admin_headers)
+    assert client.get("/api/admin/overview", headers=admin_headers).json()["registered_participants"] == 1
+
+
+def test_config_errors_are_readable(client, admin_headers):
+    H = admin_headers
+    base = client.get("/api/admin/configs/default", headers=H).json()
+    odd = {**base, "trials": {**base["trials"], "trials_per_condition": 15}}
+    msg = client.post("/api/admin/configs", headers=H, json={"config": odd}).json()["detail"]
+    assert "whole number" in msg and "pydantic" not in msg and "input_value" not in msg
+    low = {**base, "trials": {**base["trials"], "trials_per_condition": 14}}
+    msg = client.post("/api/admin/configs", headers=H, json={"config": low}).json()["detail"]
+    assert "Minimum valid trials" in msg and "11" in msg
+
+
+def test_pilot_link_for_deleted_config_never_opens_main_study(client, admin_headers):
+    H = admin_headers
+    base = client.get("/api/admin/configs/default", headers=H).json()
+    base["timing"]["fixation_ms"] = 600
+    d = client.post("/api/admin/configs", headers=H, json={"config": base}).json()
+    tok = client.post("/api/admin/pilot/launch", headers=H, json={"config_id": d["id"]}).json()["pilot_token"]
+    client.request("DELETE", f"/api/admin/configs/{d['id']}", headers=H, json={"reason": "test", "confirm_version": d["experiment_version"]})
+    r = client.get(f"/api/public/study?pilot_token={tok}")
+    assert r.status_code == 403 and "deleted" in r.json()["detail"]
+
+
+def test_same_trial_twice_in_one_upload_is_not_an_error(client, admin_headers):
+    lock_default(client, admin_headers)
+    d = client.post("/api/public/sessions", json=REG).json()
+    sid, H = d["session_id"], {"X-Session-Token": d["session_token"]}
+    t = trial_payload(d["plan"]["blocks"][0]["trials"][0])
+    r = client.post(f"/api/public/sessions/{sid}/trials", headers=H, json={"trials": [t, t]})
+    assert r.status_code == 200 and r.json()["saved"] == [t["trial_number"]] and r.json()["duplicates"] == [t["trial_number"]]
+
+
+def test_repeat_complete_keeps_original_completion_time(client, admin_headers):
+    lock_default(client, admin_headers)
+    d = client.post("/api/public/sessions", json=REG).json()
+    sid, H = d["session_id"], {"X-Session-Token": d["session_token"]}
+    main = [trial_payload(t) for b in d["plan"]["blocks"] for t in b["trials"]]
+    client.post(f"/api/public/sessions/{sid}/trials", headers=H, json={"trials": main})
+    assert client.post(f"/api/public/sessions/{sid}/complete", headers=H).json()["completion_status"] == "completed"
+    first = client.get(f"/api/admin/sessions/{sid}", headers=admin_headers).json()["session"]["completion_time"]
+    import time; time.sleep(0.02)
+    client.post(f"/api/public/sessions/{sid}/complete", headers=H)
+    assert client.get(f"/api/admin/sessions/{sid}", headers=admin_headers).json()["session"]["completion_time"] == first
+
+
+def test_device_check_required_by_default(client):
+    """The participant page must run the computer check unless the server explicitly turns it off."""
+    assert client.get("/api/public/study").json()["device_check_required"] is True

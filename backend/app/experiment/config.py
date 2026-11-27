@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from math import comb
+from math import ceil, comb
 from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -68,7 +68,12 @@ class TrialsConfig(BaseModel):
     def _check(self) -> "TrialsConfig":
         n_same = self.trials_per_condition * self.same_proportion
         if abs(n_same - round(n_same)) > 1e-9:
-            raise ValueError("trials_per_condition * same_proportion must be a whole number")
+            raise ValueError(
+                f"Trials per condition ({self.trials_per_condition}) × same proportion "
+                f"({self.same_proportion:g}) = {n_same:g}, but the number of 'same' trials must be a "
+                f"whole number. Pick a trials-per-condition value that gives a whole number "
+                f"(for 0.5, any even number), or change the same proportion."
+            )
         return self
 
 
@@ -163,7 +168,12 @@ class ExperimentConfig(BaseModel):
         if self.secondary_tasks.visual.probe == "centre" and self.grid.size % 2 == 0:
             raise ValueError("centre probe requires an odd grid size")
         if self.analysis.min_valid_trials_per_condition > self.trials.trials_per_condition:
-            raise ValueError("min_valid_trials_per_condition cannot exceed trials_per_condition")
+            raise ValueError(
+                f"Minimum valid trials per condition (analysis setting, currently "
+                f"{self.analysis.min_valid_trials_per_condition}) cannot be more than trials per condition "
+                f"({self.trials.trials_per_condition}). Lower the minimum valid trials as well — "
+                f"e.g. {max(1, ceil(0.75 * self.trials.trials_per_condition))} keeps the 75% default ratio."
+            )
         return self
 
     def to_json_dict(self) -> dict:

@@ -54,8 +54,10 @@ export default function DataPage() {
   };
   const cancel = async () => {
     if (!batch) return;
-    await request("POST", `/api/admin/import/${batch.id}/cancel`, undefined, { Authorization: `Bearer ${getAdminToken()}` });
-    setBatch(null); history.reload();
+    try {
+      await request("POST", `/api/admin/import/${batch.id}/cancel`, undefined, { Authorization: `Bearer ${getAdminToken()}` });
+      setBatch(null); history.reload();
+    } catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
   };
   const rep = batch?.report;
 
@@ -64,7 +66,7 @@ export default function DataPage() {
       <PageTitle title="Import / Export" subtitle="Upload genuine data collected outside the app, or export the de-identified dataset. Both routes feed the same analysis pipeline." />
       <div className="grid gap-6 lg:grid-cols-3">
         <Card title="Upload data" className="lg:col-span-2">
-          <div onDragOver={(e) => { e.preventDefault(); setDrag(true); }} onDragLeave={() => setDrag(false)} onDrop={onDrop}
+          <div onDragOver={(e) => { e.preventDefault(); setDrag(true); }} onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDrag(false); }} onDrop={(e) => { if (busy) { e.preventDefault(); setDrag(false); return; } onDrop(e); }}
             className={cx("flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-8 text-center", drag ? "border-blue-600 bg-blue-50 dark:bg-blue-950" : "border-slate-300 dark:border-slate-700")}>
             <p className="font-semibold">Drag & drop the completed workbook here</p>
             <p className="mt-1 text-sm text-slate-500">.xlsx workbook, or several .csv files together (participants + sessions + trials), or a SMIT .json export. Max 15 MB.</p>
@@ -87,10 +89,10 @@ export default function DataPage() {
       </div>
 
       {rep && batch && (
-        <Card title={<>Validation preview — {batch.file_names}</>} className="mt-6"
+        <Card reveal title={<>Validation preview — {batch.file_names}</>} className="mt-6"
           actions={<div className="flex gap-2">
-            <Button disabled={!rep.ok || busy} onClick={commit}>Confirm import</Button>
-            <Button variant="secondary" onClick={cancel}>Cancel</Button>
+            <Button disabled={!rep.ok || busy} onClick={commit}>{busy ? "Importing…" : "Confirm import"}</Button>
+            <Button variant="secondary" disabled={busy} onClick={cancel}>Cancel</Button>
           </div>}>
           {rep.ok ? <Alert kind="success">Validation passed ({rep.kind} import, {rep.format}). Review the preview and warnings, then confirm. Data are committed in a single transaction.</Alert>
             : <Alert kind="error">Validation failed with {rep.n_errors} error(s){rep.truncated ? " (list truncated)" : ""}. Nothing has been imported. Correct the file and upload it again — values are never corrected silently.</Alert>}

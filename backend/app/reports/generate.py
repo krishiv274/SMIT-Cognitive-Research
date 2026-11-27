@@ -35,10 +35,11 @@ def write_report_files(out_dir: Path, cfg: ExperimentConfig, settings: dict, res
                        figdir: Path | None, version: str | None, basename: str | None = None) -> tuple[list[dict], bool]:
     from ..reports import design_figures
 
-    stim = get_settings().default_config_path.parents[1] / "stimuli"
-    if not (stim / "temporal_layout.png").exists():
-        design_figures.generate_all(stim, cfg)
-    doc, final = build(cfg, settings, results, figdir, version)
+    # Draw the design figures for THIS configuration into this report's own folder (they show timings and
+    # trial counts), so a report never reuses figures drawn for another configuration or by the tests.
+    stim = out_dir / "design_figures"
+    design_figures.generate_all(stim, cfg)
+    doc, final = build(cfg, settings, results, figdir, version, stim)
     base = basename or ("SMIT_Research_Report" if final else "Preliminary_Research_Report")
     out_dir.mkdir(parents=True, exist_ok=True)
     files = [
@@ -75,8 +76,11 @@ def generate_presentation(db: Session) -> GeneratedReport:
     results = run.results_json if run else None
     figdir = Path(run.output_dir) / "figures" if run and run.output_dir else None
     cfg, _ = _config_and_version(db, results)
+    from ..reports import design_figures
     out = get_settings().outputs_dir / "reports" / ("pres_" + datetime.now().strftime("%Y%m%d_%H%M%S"))
-    p = build_presentation(out / "SMIT_Presentation.pptx", cfg, settings_store.get_all(db), results, figdir)
+    stim = out / "design_figures"
+    design_figures.generate_all(stim, cfg)
+    p = build_presentation(out / "SMIT_Presentation.pptx", cfg, settings_store.get_all(db), results, figdir, stim)
     rep = GeneratedReport(kind="presentation", analysis_run_id=run.id if run else None, output_dir=str(out),
                           files=[{"name": p.name, "label": "PowerPoint (.pptx)"}])
     db.add(rep)

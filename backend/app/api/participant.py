@@ -11,6 +11,7 @@ from ..schemas import RegistrationIn, SessionEventIn, TrialBatchIn
 from ..security import check_session_token, verify_token
 from ..services import configs as config_service
 from ..services import sessions as session_service
+from ..settings import get_settings
 from ..services import pilot_links, settings_store
 
 router = APIRouter(prefix="/api/public", tags=["participant"])
@@ -27,6 +28,10 @@ def study_info(pilot_token: str | None = None, db: Session = Depends(get_db)) ->
     if pilot_token:
         body = _pilot_token(pilot_token, db)
         pilot_cfg = db.get(ExperimentConfigVersion, body["config_id"])
+        if pilot_cfg is None:
+            # The configuration was deleted after the link was created: never fall back to the main study.
+            raise HTTPException(403, "The configuration for this pilot link was deleted. Please ask the researcher "
+                                     "for a new pilot link (Dashboard → Pilot mode → Start pilot session).")
     row = pilot_cfg or active
     cfg = ExperimentConfig.model_validate(row.config_json) if row else None
     return {
@@ -34,13 +39,28 @@ def study_info(pilot_token: str | None = None, db: Session = Depends(get_db)) ->
         "short_title": "SMIT — Spatial Memory Interference Task",
         "purpose": ("This study looks at how people remember the positions of shapes for a few seconds "
                     "while doing other brief tasks."),
-        "estimated_minutes": "15–20",
+        "estimated_minutes": estimated_minutes(cfg),
         "main_study_open": active is not None,
         "mode": "pilot" if pilot_cfg else "main",
+        "device_check_required": get_settings().require_device_check,
         "experiment_version": row.experiment_version if row else None,
         "config": cfg.to_json_dict() if cfg else None,
         "settings": settings_store.get_public(db),
     }
+
+
+def estimated_minutes(cfg: ExperimentConfig | None) -> str:
+    """Rough session length shown to participants, derived from the configuration (task + ~8 min of
+    consent, instructions, practice feedback and breaks)."""
+    if cfg is None:
+        return "15–20"
+    t, tr = cfg.timing, cfg.trials
+    per_trial_ms = (t.fixation_ms + t.memory_stimulus_ms + t.post_stimulus_blank_ms + t.interference_ms
+                    + t.retention_ms + 0.6 * t.recognition_deadline_ms + (t.iti_min_ms + t.iti_max_ms) / 2)
+    n = 3 * (tr.trials_per_condition + tr.practice_per_condition)
+    task_min = n * per_trial_ms / 60000 + 2 * t.break_min_s / 60
+    lo = max(5, round((task_min + 6) / 5) * 5)
+    return f"{lo}–{lo + 5}"
 
 
 PILOT_LINK_INVALID = ("This pilot link has expired or is invalid. Please ask the researcher for a new "

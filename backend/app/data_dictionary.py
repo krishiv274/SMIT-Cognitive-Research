@@ -69,7 +69,7 @@ SESSION_VARS: list[Var] = [
 TRIAL_VARS: list[Var] = [
     Var("session_id", "str", True, "Session identifier (must exist in Sessions)."),
     Var("participant_id", "str", True, "Participant identifier (must match the session's participant)."),
-    Var("trial_number", "int", True, "Trial number within the experimental part (1–60) or within practice (1–6).", min=1),
+    Var("trial_number", "int", True, "Trial number within the experimental part (1 to 3 × trials per condition, e.g. 1–42 with 14 per condition) or within practice (1 to 3 × practice trials per condition).", min=1),
     Var("block_number", "int", True, "Block position: 0 = practice, 1–3 = experimental blocks.", min=0, max=3),
     Var("condition", "enum", True, "A = Control, B = Numerical interference, C = Visual interference.", allowed=("A", "B", "C")),
     Var("practice_trial", "bool", True, "TRUE for practice trials (excluded from analysis).", allowed=BOOL),

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { admin } from "../api";
-import { Alert, Badge, Button, Card, GridIllustration, Table, inputCls } from "../components/ui";
+import { Alert, Badge, Button, Card, GridIllustration, Table, errText, inputCls } from "../components/ui";
 import type { PlanTrial, TrialPlan } from "../types";
 import type { ConfigRow } from "./ConfigPage";
 import { PageTitle, fmtDate, useLoad } from "./ResearcherApp";
@@ -35,6 +35,14 @@ export default function PilotPage() {
   const [err, setErr] = useState<string | null>(null);
   const [session, setSession] = useState<string | null>(null);
   const [plan, setPlan] = useState<TrialPlan | null>(null);
+  const [done, setDone] = useState<string | null>(null);
+  const [, setTick] = useState(0);
+
+  // Re-render every 30 s so the "expires in" countdown stays correct and expired links disappear.
+  useEffect(() => {
+    const t = setInterval(() => { setTick((x) => x + 1); setLinks(loadLinks()); }, 30000);
+    return () => clearInterval(t);
+  }, []);
 
   // Refresh the pilot-session list when the researcher returns to this tab (e.g. after a pilot finished).
   useEffect(() => {
@@ -88,10 +96,38 @@ export default function PilotPage() {
     setLinks(next);
   };
   const preview = async () => {
-    const id = cfgId || configs.data?.[0]?.id;
-    if (!id) return;
-    const r = await admin<{ plan: TrialPlan }>("GET", `/configs/${id}/preview?seed=${Math.floor(Math.random() * 1e6)}&order=ABC`);
-    setPlan(r.plan);
+    setErr(null);
+    const id = cfgId || configs.data?.find((c) => c.status === "draft")?.id || configs.data?.find((c) => c.is_active_main)?.id || configs.data?.[0]?.id;
+    if (!id) { setErr("There is no configuration to preview."); return; }
+    try {
+      const r = await admin<{ plan: TrialPlan }>("GET", `/configs/${id}/preview?seed=${Math.floor(Math.random() * 1e6)}&order=ABC`);
+      setPlan(r.plan);
+    } catch (e) { setErr(errText(e)); }
+  };
+  const nPilotSessions = (pilots.data ?? []).reduce((a, p) => a + p.sessions.length, 0);
+  const deleteOne = async (pid: string) => {
+    if (!window.confirm(`Delete pilot participant ${pid} and all of their pilot sessions and trials?\n\nThis cannot be undone. If ${pid} is the newest pilot, its number will be reused by the next pilot session.`)) return;
+    setErr(null); setDone(null);
+    try {
+      await admin("DELETE", `/pilot/participants/${encodeURIComponent(pid)}`);
+      if (session && pilots.data?.find((p) => p.participant_id === pid)?.sessions.some((s) => s.session_id === session)) setSession(null);
+      setDone(`${pid} was deleted.`);
+      pilots.reload();
+    } catch (e) { setErr(errText(e)); }
+  };
+  const deleteAll = async () => {
+    const n = pilots.data?.length ?? 0;
+    if (!n) return;
+    const typed = window.prompt(`Permanently delete ALL ${n} pilot participant(s) and their ${nPilotSessions} session(s)? Main-study data are not affected. The next pilot will be PILOT-001 again.\n\nThis cannot be undone. Type DELETE to confirm:`);
+    if (typed === null) return;
+    if (typed.trim().toUpperCase() !== "DELETE") { setErr("Nothing was deleted — you must type DELETE to confirm."); return; }
+    setErr(null); setDone(null);
+    try {
+      const r = await admin<{ deleted: string[]; sessions: number; trials: number }>("DELETE", "/pilot/participants");
+      setSession(null);
+      setDone(`Deleted ${r.deleted.length} pilot participant(s), ${r.sessions} session(s) and ${r.trials} trial(s). The next pilot will be PILOT-001.`);
+      pilots.reload();
+    } catch (e) { setErr(errText(e)); }
   };
 
   return (
@@ -101,13 +137,13 @@ export default function PilotPage() {
         <div className="flex flex-wrap items-end gap-3">
           <label className="text-sm">Configuration
             <select className={inputCls.replace("w-full", "") + " mt-1 block w-full sm:w-80"} value={cfgId} onChange={(e) => setCfgId(e.target.value ? Number(e.target.value) : "")}>
-              <option value="">Latest draft (or the active configuration if there is no draft)</option>
+              <option value="">Latest draft (or active configuration)</option>
               {(configs.data ?? []).map((c) => <option key={c.id} value={c.id}>{c.experiment_version} — {c.status}</option>)}
             </select>
           </label>
           <Button onClick={launch}>Start pilot session (new tab)</Button>
           <Button variant="secondary" onClick={preview}>Preview stimuli</Button>
-          <Button variant="ghost" className="text-red-700 dark:text-red-400" onClick={revokeAll}>Revoke all pilot links</Button>
+          <Button variant="dangerGhost" onClick={revokeAll}>Revoke all pilot links</Button>
         </div>
         {links.length > 0 && (
           <div className="mt-4 space-y-2">
@@ -132,22 +168,31 @@ export default function PilotPage() {
           </div>
         )}
         {err && <div className="mt-3"><Alert kind="error">{err}</Alert></div>}
+        {done && <div className="mt-3"><Alert kind="success">{done}</Alert></div>}
         <p className="mt-3 text-xs text-slate-500">Follow experiment/documentation/Pilot_Testing_Protocol.md and record observations in Settings → Pilot observations. Automated software tests are not human pilot testing.</p>
       </Card>
       {plan && (
-        <Card title="Stimulus preview (randomly generated example plan — not participant data)" className="mb-6" actions={<Button variant="ghost" onClick={() => setPlan(null)}>Close</Button>}>
+        <Card reveal title="Stimulus preview (randomly generated example plan — not participant data)" className="mb-6" actions={<Button variant="ghost" onClick={() => setPlan(null)}>Close</Button>}>
           <div className="grid gap-4 md:grid-cols-3">
             {plan.blocks.map((b) => <PreviewTrial key={b.condition} t={b.trials[0]} />)}
           </div>
         </Card>
       )}
       {session && <div className="mb-6"><SessionDetail sessionId={session} onClose={() => setSession(null)} /></div>}
-      <Card title="Pilot sessions (debugging: event timestamps, timing deviations, stimulus previews)" actions={<Button variant="secondary" onClick={pilots.reload}>Refresh</Button>}>
-        <Table head={["Pilot ID", "Session", "Version", "Trials", "Created", ""]} empty="No pilot sessions yet."
+      <Card title="Pilot sessions" actions={<div className="flex gap-2">
+          <Button variant="secondary" onClick={pilots.reload}>Refresh</Button>
+          <Button variant="danger" disabled={!pilots.data?.length} onClick={deleteAll}>Delete all pilot data</Button>
+        </div>}>
+        <p className="-mt-2 mb-3 text-sm text-slate-500 dark:text-slate-400">Inspect a session for event timestamps, timing deviations and stimulus previews.</p>
+        {pilots.error && <div className="mb-3"><Alert kind="error">{pilots.error}</Alert></div>}
+        <Table head={["Pilot ID", "Session", "Version", "Trials", "Created", ""]} empty={pilots.loading && !pilots.data ? "Loading…" : "No pilot sessions yet."}
           rows={(pilots.data ?? []).flatMap((p) => p.sessions.map((s) => [
             <span className="font-mono">{p.participant_id}</span>, <Badge tone={s.completion_status === "completed" ? "green" : "amber"}>{s.completion_status}</Badge>,
             <span className="font-mono text-xs">{s.experiment_version}</span>, `${s.main_trials_saved}/${s.n_main_planned}`, fmtDate(s.created_at),
-            <Button variant="ghost" className="px-2 py-1" onClick={() => setSession(s.session_id)}>Inspect</Button>,
+            <div className="flex gap-1">
+              <Button variant="ghost" className="px-2 py-1" onClick={() => setSession(s.session_id)}>Inspect</Button>
+              <Button variant="dangerGhost" className="px-2 py-1" onClick={() => deleteOne(p.participant_id)}>Delete</Button>
+            </div>,
           ]))} />
       </Card>
     </>

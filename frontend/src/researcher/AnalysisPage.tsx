@@ -11,7 +11,7 @@ interface Run { id: number; created_at: string; status: string; n_participants_i
 const C = ["A", "B", "C"] as const;
 const LBL: Record<string, string> = { A: "Control", B: "Numerical", C: "Visual" };
 const COL: Record<string, string> = { A: "#0072B2", B: "#E69F00", C: "#009E73" };
-export const num = (x: unknown, d = 3) => (typeof x === "number" && isFinite(x) ? x.toFixed(d) : "—");
+export const num = (x: unknown, d = 3) => (typeof x === "number" && isFinite(x) ? (Number(x.toFixed(d)) + 0).toFixed(d) : "—");
 export const pfmt = (p: unknown) => (typeof p !== "number" ? "—" : p < 0.001 ? "< .001" : p.toFixed(3).replace(/^0/, ""));
 
 export default function AnalysisPage() {
@@ -33,7 +33,9 @@ export default function AnalysisPage() {
       <PageTitle title="Statistical analysis" subtitle="Runs the pre-specified analysis plan on all eligible main-study data (collected + imported). Pilot sessions and practice trials are excluded automatically."
         actions={<Button onClick={runNow} disabled={busy}>{busy ? "Running analysis…" : "Run Analysis"}</Button>} />
       {err && <div className="mb-4"><Alert kind="error">{err}</Alert></div>}
-      {!r && !latest.loading && <Alert kind="info">No analysis has been run yet. Click <strong>Run Analysis</strong>. With no genuine data, the results will be marked as pending.</Alert>}
+      {latest.error && <div className="mb-4"><Alert kind="error">{latest.error}</Alert></div>}
+      {latest.loading && !run && <p className="text-sm">Loading…</p>}
+      {!r && !latest.loading && !latest.error && <Alert kind="info">No analysis has been run yet. Click <strong>Run Analysis</strong>. With no genuine data, the results will be marked as pending.</Alert>}
       {r && <Results run={run!} r={r} />}
     </>
   );

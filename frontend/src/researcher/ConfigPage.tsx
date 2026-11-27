@@ -17,6 +17,7 @@ const FIELDS: { section: string; key: string; label: string; hint: string; step?
   { section: "timing", key: "iti_max_ms", label: "ITI maximum (ms)", hint: "Spec: 1200" },
   { section: "timing", key: "break_min_s", label: "Minimum break between blocks (s)", hint: "Default 20" },
   { section: "trials", key: "trials_per_condition", label: "Trials per condition", hint: "Spec: 20" },
+  { section: "analysis", key: "min_valid_trials_per_condition", label: "Minimum valid trials per condition (analysis)", hint: "Fewer valid trials in any condition → participant excluded. Default 75% of trials" },
   { section: "trials", key: "practice_per_condition", label: "Practice trials per condition", hint: "Spec: 2" },
   { section: "trials", key: "change_type", label: "Recognition difficulty (moved cell)", hint: "any / adjacent (harder) / non_adjacent (easier)", options: ["any", "adjacent", "non_adjacent"] },
 ];
@@ -34,8 +35,43 @@ export default function ConfigPage() {
 
   useEffect(() => { if (edit) setJsonText(JSON.stringify(edit, null, 2)); }, [edit, json]);
 
-  const startEdit = (r: ConfigRow) => { setBase(r); setEdit(structuredClone(r.config)); setNotes(""); setMsg(null); };
-  const setVal = (sec: string, key: string, v: string, isText: boolean) => setEdit((e) => e && ({ ...e, [sec]: { ...e[sec], [key]: isText ? v : Number(v) } }));
+  const startEdit = (r: ConfigRow) => { setJson(false); setLockRow(null); setBase(r); setEdit(structuredClone(r.config)); setNotes(""); setMsg(null); };
+  // Empty number boxes stay empty while typing (instead of snapping to 0); the server rejects them if saved empty.
+  const setVal = (sec: string, key: string, v: string, isText: boolean) => setEdit((e) => {
+    if (!e) return e;
+    const val = isText || v === "" ? v : Number(v);
+    const next = { ...e, [sec]: { ...e[sec], [key]: val } };
+    // Keep "minimum valid trials" consistent with the trial count: if it was at the default 75% ratio, or
+    // would now exceed the trial count, move it to 75% of the new count.
+    if (sec === "trials" && key === "trials_per_condition" && typeof val === "number" && val > 0) {
+      const oldN = Number(e.trials.trials_per_condition);
+      const minValid = Number(e.analysis.min_valid_trials_per_condition);
+      if (minValid > val || minValid === Math.ceil(0.75 * oldN)) {
+        next.analysis = { ...e.analysis, min_valid_trials_per_condition: Math.max(1, Math.ceil(0.75 * val)) };
+      }
+    }
+    return next;
+  });
+  const fieldError = (sec: string, key: string): string | undefined => {
+    if (!edit) return undefined;
+    const v = edit[sec]?.[key];
+    if (v === "") return "Enter a value.";
+    if (sec === "trials" && key === "trials_per_condition") {
+      const n = Number(v) * Number(edit.trials.same_proportion);
+      if (Math.abs(n - Math.round(n)) > 1e-9) return `Must give a whole number of 'same' trials (same proportion ${edit.trials.same_proportion}${Number(edit.trials.same_proportion) === 0.5 ? " → use an even number" : ""}).`;
+    }
+    if (sec === "analysis" && key === "min_valid_trials_per_condition" && edit.trials.trials_per_condition !== "" && Number(v) > Number(edit.trials.trials_per_condition)) {
+      return `Cannot be more than trials per condition (${edit.trials.trials_per_condition}).`;
+    }
+    return undefined;
+  };
+  const toggleJson = () => {
+    if (json) {
+      // Switching back to the form: keep the edits made in the JSON box.
+      try { setEdit(JSON.parse(jsonText)); setMsg(null); } catch { setMsg({ kind: "error", text: "The JSON is not valid — fix it before switching back to the form view." }); return; }
+    }
+    setJson((j) => !j);
+  };
 
   const save = async (asNew: boolean) => {
     if (!edit || !base) return;
@@ -54,6 +90,7 @@ export default function ConfigPage() {
         : await admin<ConfigRow>("PUT", `/configs/${base.id}`, { config: cfg, notes });
       setMsg({ kind: "success", text: `Saved draft ${r.experiment_version}.` + (r.deviations_from_specification.length ? ` Deviations from specification: ${r.deviations_from_specification.join("; ")}` : "") });
       setEdit(null);
+      setJson(false);
       reload();
     } catch (e) { setMsg({ kind: "error", text: e instanceof Error ? e.message : String(e) }); }
   };
@@ -81,28 +118,28 @@ export default function ConfigPage() {
   return (
     <>
       <PageTitle title="Experiment configuration" subtitle="Edit parameters as DRAFT versions for pilot testing; lock one version for the main study. Locked versions cannot be changed silently — every change creates a new audited version." />
-      {msg && <div className="mb-4"><Alert kind={msg.kind}>{msg.text}</Alert></div>}
+      {msg && !edit && <div className="mb-4"><Alert kind={msg.kind}>{msg.text}</Alert></div>}
       {error && <Alert kind="error">{error}</Alert>}
       {lockRow && (
-        <Card title={`Lock ${lockRow.experiment_version} for the main study`} className="mb-6 border-amber-400">
+        <Card reveal title={`Lock ${lockRow.experiment_version} for the main study`} className="mb-6 border-amber-400">
           <Alert kind="warn">After locking, main-study sessions use exactly these parameters and record this version. Lock only after human pilot testing. {data?.some((r) => r.is_active_main) && "The currently active configuration will be retired; if main data were already collected this is a protocol deviation that must be reported."}</Alert>
           {lockRow.deviations_from_specification.length > 0 && <div className="mt-3"><Alert kind="info">Differences from the original specification (document the pilot-based justification): {lockRow.deviations_from_specification.join("; ")}</Alert></div>}
           <div className="mt-4"><Field label="Justification (required, recorded in the audit log)"><textarea className={inputCls} rows={3} value={just} onChange={(e) => setJust(e.target.value)} placeholder="e.g. Pilot with 4 volunteers: control accuracy 72–90%, secondary accuracy ≥ 88%; no changes needed." /></Field></div>
-          <div className="mt-3 flex gap-2"><Button disabled={just.trim().length < 10} onClick={lock}>Lock configuration</Button><Button variant="secondary" onClick={() => setLockRow(null)}>Cancel</Button></div>
+          <div className="mt-3 flex gap-2"><Button disabled={just.trim().length < 10} onClick={lock}>Lock configuration</Button><Button variant="secondary" onClick={() => { setLockRow(null); setJust(""); }}>Cancel</Button></div>
         </Card>
       )}
       {edit && base && (
-        <Card title={`Editing (based on ${base.experiment_version})`} className="mb-6" actions={<Button variant="ghost" onClick={() => setJson((j) => !j)}>{json ? "Form view" : "Advanced JSON"}</Button>}>
+        <Card title={`Editing (based on ${base.experiment_version})`} className="mb-6" reveal actions={<Button variant="ghost" onClick={toggleJson}>{json ? "Form view" : "Advanced JSON"}</Button>}>
           {json ? (
             <textarea className={inputCls + " font-mono text-xs"} rows={24} value={jsonText} onChange={(e) => setJsonText(e.target.value)} />
           ) : (
             <div className="grid gap-4 md:grid-cols-3">
               {FIELDS.map((f) => (
-                <Field key={f.section + f.key} label={f.label} hint={f.hint}>
+                <Field key={f.section + f.key} label={f.label} hint={f.hint} error={fieldError(f.section, f.key)}>
                   {f.options ? (
-                    <select className={inputCls} value={edit[f.section][f.key]} onChange={(e) => setVal(f.section, f.key, e.target.value, true)}>{f.options.map((o) => <option key={o}>{o}</option>)}</select>
+                    <select className={inputCls} value={edit[f.section][f.key]} onChange={(e) => setVal(f.section, f.key, e.target.value, true)}>{f.options.map((o) => <option key={o} value={o}>{o}</option>)}</select>
                   ) : (
-                    <input type="number" className={inputCls} value={edit[f.section][f.key]} onChange={(e) => setVal(f.section, f.key, e.target.value, false)} />
+                    <input type="number" min={0} className={inputCls} value={edit[f.section][f.key] ?? ""} onChange={(e) => setVal(f.section, f.key, e.target.value, false)} />
                   )}
                 </Field>
               ))}
@@ -113,32 +150,33 @@ export default function ConfigPage() {
               </Field>
               <Field label="Arithmetic operand range" hint="min–max operand (difficulty lever)">
                 <div className="flex gap-2">
-                  <input type="number" className={inputCls} value={edit.secondary_tasks.numerical.operand_min} onChange={(e) => setEdit({ ...edit, secondary_tasks: { ...edit.secondary_tasks, numerical: { ...edit.secondary_tasks.numerical, operand_min: Number(e.target.value) } } })} />
-                  <input type="number" className={inputCls} value={edit.secondary_tasks.numerical.operand_max} onChange={(e) => setEdit({ ...edit, secondary_tasks: { ...edit.secondary_tasks, numerical: { ...edit.secondary_tasks.numerical, operand_max: Number(e.target.value) } } })} />
+                  <input type="number" aria-label="Minimum operand" className={inputCls} value={edit.secondary_tasks.numerical.operand_min} onChange={(e) => setEdit({ ...edit, secondary_tasks: { ...edit.secondary_tasks, numerical: { ...edit.secondary_tasks.numerical, operand_min: e.target.value === "" ? "" : Number(e.target.value) } } })} />
+                  <input type="number" aria-label="Maximum operand" className={inputCls} value={edit.secondary_tasks.numerical.operand_max} onChange={(e) => setEdit({ ...edit, secondary_tasks: { ...edit.secondary_tasks, numerical: { ...edit.secondary_tasks.numerical, operand_max: e.target.value === "" ? "" : Number(e.target.value) } } })} />
                 </div>
               </Field>
               <Field label="Configuration name"><input className={inputCls} value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></Field>
             </div>
           )}
+          {msg && <div className="mt-4"><Alert kind={msg.kind}>{msg.text}</Alert></div>}
           <div className="mt-4"><Field label="Change notes (why?)"><input className={inputCls} value={notes} onChange={(e) => setNotes(e.target.value)} /></Field></div>
           <div className="mt-4 flex flex-wrap gap-2">
             <Button onClick={() => save(true)}>Save as new draft version</Button>
             {base.status === "draft" && base.sessions_using === 0 && <Button variant="secondary" onClick={() => save(false)}>Update this draft</Button>}
-            <Button variant="ghost" onClick={() => setEdit(null)}>Cancel</Button>
+            <Button variant="ghost" onClick={() => { setEdit(null); setJson(false); setMsg(null); }}>Cancel</Button>
           </div>
         </Card>
       )}
       <Card title="Versions">
-        <Table head={["Version", "Status", "Name", "Created", "Sessions", "Deviations from spec", "Actions"]}
+        <Table head={["Version", "Status", "Name", "Created", "Sessions", "Deviations from spec", ""]}
           rows={(data ?? []).map((r) => [
             <span className="font-mono text-xs">{r.experiment_version}</span>,
             r.is_active_main ? <Badge tone="green">locked · ACTIVE</Badge> : <Badge tone={r.status === "draft" ? "blue" : "slate"}>{r.status}</Badge>,
-            <span title={r.notes ?? ""} className="block min-w-48 whitespace-normal">{r.name}</span>, fmtDate(r.created_at), r.sessions_using,
-            r.deviations_from_specification.length ? <span className="text-xs">{r.deviations_from_specification.join("; ")}</span> : "none",
+            <span title={r.notes ?? ""} className="block min-w-32 max-w-[14rem] whitespace-normal">{r.name}</span>, <span className="block min-w-24 max-w-[7.5rem] whitespace-normal">{fmtDate(r.created_at)}</span>, r.sessions_using,
+            r.deviations_from_specification.length ? <span title={r.deviations_from_specification.join("; ")} className="block min-w-40 max-w-[16rem] whitespace-normal text-xs">{r.deviations_from_specification.map((d) => d.replace(/^\w+\./, "").replace("specification", "spec")).join("; ")}</span> : "none",
             <div className="flex gap-1">
               <Button variant="ghost" className="px-2 py-1" onClick={() => startEdit(r)}>{r.status === "draft" ? "Edit" : "Copy to draft"}</Button>
               {r.status === "draft" && <Button variant="ghost" className="px-2 py-1" onClick={() => setLockRow(r)}>Lock</Button>}
-              {r.sessions_using === 0 && <Button variant="ghost" className="px-2 py-1 text-red-700 dark:text-red-400" onClick={() => remove(r)}>Delete</Button>}
+              {r.sessions_using === 0 && <Button variant="dangerGhost" className="px-2 py-1" onClick={() => remove(r)}>Delete</Button>}
             </div>,
           ])} />
       </Card>

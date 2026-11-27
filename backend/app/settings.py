@@ -24,6 +24,9 @@ class Settings(BaseSettings):
 
     # Behaviour
     allow_synthetic_imports: bool = False  # only true inside automated tests
+    # Participants must pass the computer check (Mac, Chrome, no power saving) before the test.
+    # Only automated tests turn this off; it cannot be bypassed from the participant's browser.
+    require_device_check: bool = True
     max_upload_mb: int = 15
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     frontend_dist: Path = REPO_ROOT / "frontend" / "dist"

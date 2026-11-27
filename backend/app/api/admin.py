@@ -216,10 +216,18 @@ def session_detail(session_id: str, db: Session = Depends(get_db)) -> dict:
         "session": {c.name: getattr(s, c.name) for c in ExperimentSession.__table__.columns
                     if c.name not in ("token_hash", "trial_plan")},
         "plan": s.trial_plan,
+        "min_valid_rt_ms": _session_min_rt(db, s),
         "trials": tl,
         "timing_summary": timing,
         "flags": dict(Counter(t.timing_quality_flag for t in trials)),
     }
+
+
+def _session_min_rt(db: Session, s: ExperimentSession) -> float:
+    """Anticipation cut-off from the configuration the session ran with (default if it was deleted)."""
+    row = db.get(ExperimentConfigVersion, s.config_id) if s.config_id else None
+    cfg = ExperimentConfig.model_validate(row.config_json) if row else ExperimentConfig()
+    return cfg.analysis.min_valid_rt_ms
 
 
 @router.post("/sessions/{session_id}/status", dependencies=[AdminDep])
@@ -349,6 +357,34 @@ def revoke_pilot_links(db: Session = Depends(get_db)) -> dict:
     audit(db, "pilot_links_revoked", entity_type="pilot")
     db.commit()
     return {"revoked_at": ts}
+
+
+def _delete_pilot_participants(db: Session, parts: list[Participant], reason: str) -> dict:
+    n_sessions = sum(len(p.sessions) for p in parts)
+    n_trials = sum(len(s.trials) for p in parts for s in p.sessions)
+    ids = [p.participant_id for p in parts]
+    for p in parts:
+        db.delete(p)
+    audit(db, "pilot_participants_deleted", entity_type="pilot", entity_id=",".join(ids)[:200] or None,
+          details={"participant_ids": ids, "sessions_deleted": n_sessions, "trials_deleted": n_trials, "reason": reason})
+    db.commit()
+    return {"deleted": ids, "sessions": n_sessions, "trials": n_trials}
+
+
+@router.delete("/pilot/participants/{pid}", dependencies=[AdminDep])
+def delete_pilot_participant(pid: str, db: Session = Depends(get_db)) -> dict:
+    """Delete one pilot participant with all sessions and trials. Main-study participants cannot be deleted here."""
+    p = _participant_or_404(db, pid)
+    if p.participant_type != "pilot":
+        raise HTTPException(422, "Only pilot participants can be deleted here. Use Participants → Delete for main-study data.")
+    return _delete_pilot_participants(db, [p], "Pilot data deleted from the Pilot mode page")
+
+
+@router.delete("/pilot/participants", dependencies=[AdminDep])
+def delete_all_pilot_participants(db: Session = Depends(get_db)) -> dict:
+    """Delete every pilot participant. New pilot IDs then start again at PILOT-001."""
+    parts = list(db.scalars(select(Participant).where(Participant.participant_type == "pilot")).all())
+    return _delete_pilot_participants(db, parts, "All pilot data deleted from the Pilot mode page")
 
 
 # ---------------------------------------------------------------------------

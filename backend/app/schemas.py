@@ -36,6 +36,9 @@ class DeviceInfo(BaseModel):
     hardware_concurrency: int | None = None
     estimated_refresh_rate: float | None = None
     touch_capable: bool | None = None
+    charging: bool | None = None
+    battery_level: float | None = Field(None, ge=0, le=1)
+    device_check: str | None = Field(None, max_length=200)
 
 
 class RegistrationIn(BaseModel):

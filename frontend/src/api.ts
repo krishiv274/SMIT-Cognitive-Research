@@ -77,7 +77,14 @@ export function admin<T>(method: string, url: string, body?: unknown): Promise<T
   });
 }
 
-export async function adminDownload(url: string, fallbackName: string): Promise<void> {
+/** Download a file; failures are shown as a toast instead of being silently swallowed. */
+export function adminDownload(url: string, fallbackName: string): Promise<void> {
+  return adminDownloadRaw(url, fallbackName).catch((e) => {
+    window.dispatchEvent(new CustomEvent("smit-toast", { detail: { text: `Download failed: ${e instanceof Error ? e.message : String(e)}`, kind: "error" } }));
+  });
+}
+
+async function adminDownloadRaw(url: string, fallbackName: string): Promise<void> {
   const t = getAdminToken();
   const res = await fetch(`/api/admin${url}`, { headers: t ? { Authorization: `Bearer ${t}` } : {} });
   if (!res.ok) {

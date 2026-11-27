@@ -1,33 +1,42 @@
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import { useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
 
 export function cx(...c: (string | false | null | undefined)[]): string {
   return c.filter(Boolean).join(" ");
 }
 
-type Variant = "primary" | "secondary" | "danger" | "ghost";
+type Variant = "primary" | "secondary" | "danger" | "ghost" | "dangerGhost";
 
 export function Button({ variant = "primary", className, ...rest }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant }) {
   const styles: Record<Variant, string> = {
-    primary: "bg-blue-700 text-white hover:bg-blue-800 disabled:bg-slate-400",
+    primary: "bg-blue-700 text-white hover:bg-blue-800 disabled:bg-slate-400 dark:disabled:bg-slate-800 dark:disabled:text-slate-500",
     secondary: "border border-slate-300 bg-white text-slate-800 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800",
-    danger: "bg-red-700 text-white hover:bg-red-800 disabled:bg-slate-400",
+    danger: "bg-red-700 text-white hover:bg-red-800 disabled:bg-slate-400 dark:disabled:bg-slate-800 dark:disabled:text-slate-500",
     ghost: "text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800",
+    dangerGhost: "text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950",
   };
   return (
     <button
-      className={cx("inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed", styles[variant], className)}
+      className={cx("inline-flex items-center justify-center gap-2 rounded-lg font-semibold",
+        !/(^|\s)text-(xs|sm|base|lg|xl)(\s|$)/.test(className ?? "") && "text-sm",
+        // default padding only when the caller does not set its own (Tailwind cannot tell which of two px-* wins)
+        !/(^|\s)px-/.test(className ?? "") && "px-4", !/(^|\s)py-/.test(className ?? "") && "py-2", "focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed", styles[variant], className)}
       {...rest}
     />
   );
 }
 
-export function Card({ title, actions, children, className }: { title?: ReactNode; actions?: ReactNode; children: ReactNode; className?: string }) {
+export function Card({ title, actions, children, className, reveal }: { title?: ReactNode; actions?: ReactNode; children: ReactNode; className?: string; reveal?: boolean }) {
+  const ref = useRef<HTMLElement>(null);
+  // Panels that open after an action (forms, session details, previews) scroll into view so they are not off-screen.
+  useEffect(() => {
+    if (reveal) ref.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+  }, [reveal]);
   return (
-    <section className={cx("rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900", className)}>
+    <section ref={ref} className={cx("rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900", className)}>
       {(title || actions) && (
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-          {title && <h2 className="text-lg font-semibold">{title}</h2>}
-          {actions}
+          {title && <h2 className="min-w-0 text-lg font-semibold">{title}</h2>}
+          {actions && <div className="ml-auto flex flex-wrap items-center gap-2">{actions}</div>}
         </div>
       )}
       {children}
@@ -69,23 +78,29 @@ export function Field({ label, hint, error, children }: { label: string; hint?: 
 export const inputCls =
   "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-slate-700 dark:bg-slate-950 dark:focus:ring-blue-900";
 
-export function Table({ head, rows, empty = "No data yet." }: { head: ReactNode[]; rows: ReactNode[][]; empty?: string }) {
+/** `maxHeight` (CSS length) makes the table scroll vertically inside its box with the header row kept visible. */
+export function Table({ head, rows, empty = "No data yet.", maxHeight, footer }: { head: ReactNode[]; rows: ReactNode[][]; empty?: string; maxHeight?: string; footer?: ReactNode[] }) {
   if (rows.length === 0) {
     return <div className="rounded-lg border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-500 dark:border-slate-700">{empty}</div>;
   }
   return (
-    <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
+    <div className={cx("overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800", maxHeight && "overflow-y-auto overscroll-contain")} style={maxHeight ? { maxHeight } : undefined}>
       <table className="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-800">
-        <thead className="bg-slate-50 dark:bg-slate-900">
-          <tr>{head.map((h, i) => <th key={i} className="whitespace-nowrap px-3 py-2 text-left font-semibold">{h}</th>)}</tr>
+        <thead className={cx("bg-slate-50 dark:bg-slate-900", maxHeight && "sticky top-0 z-10 shadow-[0_1px_0_0_rgb(226_232_240)] dark:shadow-[0_1px_0_0_#1f1f1f]")}>
+          <tr>{head.map((h, i) => <th key={i} className="whitespace-nowrap px-2.5 py-2 text-left align-middle font-semibold">{h}</th>)}</tr>
         </thead>
         <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
           {rows.length === 0 ? (
             <tr><td colSpan={head.length} className="px-3 py-6 text-center text-slate-500">{empty}</td></tr>
           ) : rows.map((r, i) => (
-            <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-900/60">{r.map((c, j) => <td key={j} className="whitespace-nowrap px-3 py-2 align-top">{c}</td>)}</tr>
+            <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-900/60">{r.map((c, j) => <td key={j} className="whitespace-nowrap px-2.5 py-2 align-middle">{c}</td>)}</tr>
           ))}
         </tbody>
+        {footer && (
+          <tfoot className="border-t-2 border-slate-300 bg-slate-50 font-semibold dark:border-slate-700 dark:bg-slate-900">
+            <tr>{footer.map((c, j) => <td key={j} className="whitespace-nowrap px-2.5 py-2 align-middle">{c}</td>)}</tr>
+          </tfoot>
+        )}
       </table>
     </div>
   );
@@ -117,5 +132,40 @@ export function GridIllustration({ pattern, color = "#1F3A93", size = 3, cell = 
       </svg>
       {label && <figcaption className="text-xs text-slate-600 dark:text-slate-400">{label}</figcaption>}
     </figure>
+  );
+}
+
+/** Show a short message in the corner (used for errors from downloads and other background actions). */
+export function toast(text: string, kind: "error" | "success" = "error"): void {
+  window.dispatchEvent(new CustomEvent("smit-toast", { detail: { text, kind } }));
+}
+
+export function errText(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
+}
+
+export function Toasts() {
+  const [items, setItems] = useState<{ id: number; text: string; kind: "error" | "success" }[]>([]);
+  useEffect(() => {
+    let n = 0;
+    const on = (e: Event) => {
+      const d = (e as CustomEvent<{ text: string; kind: "error" | "success" }>).detail;
+      const id = ++n;
+      setItems((x) => [...x, { id, ...d }]);
+      setTimeout(() => setItems((x) => x.filter((i) => i.id !== id)), 6000);
+    };
+    window.addEventListener("smit-toast", on);
+    return () => window.removeEventListener("smit-toast", on);
+  }, []);
+  if (!items.length) return null;
+  return (
+    <div className="fixed bottom-4 right-4 z-50 flex max-w-sm flex-col gap-2">
+      {items.map((i) => (
+        <div key={i.id} className="relative rounded-lg shadow-lg">
+          <Alert kind={i.kind}><span className="block pr-6">{i.text}</span></Alert>
+          <button className="absolute right-2 top-2 rounded px-1 text-lg leading-none opacity-70 hover:opacity-100" aria-label="Dismiss" onClick={() => setItems((x) => x.filter((y) => y.id !== i.id))}>×</button>
+        </div>
+      ))}
+    </div>
   );
 }

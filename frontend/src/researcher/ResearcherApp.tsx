@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { NavLink, Navigate, Route, Routes } from "react-router-dom";
 import { admin, getAdminToken, request, setAdminToken } from "../api";
-import { Alert, Button, Field, cx, inputCls } from "../components/ui";
+import { Alert, Button, Field, Toasts, cx, inputCls } from "../components/ui";
 import AnalysisPage from "./AnalysisPage";
 import AuditPage from "./AuditPage";
 import ConfigPage from "./ConfigPage";
@@ -96,7 +96,7 @@ export default function ResearcherApp() {
             <div className="text-lg font-bold">SMIT</div>
             <div className="text-xs text-slate-500">Research dashboard</div>
           </div>
-          <button className="rounded p-2 md:hidden" onClick={() => setMenuOpen((m) => !m)} aria-label="Toggle menu">☰</button>
+          <button className="rounded p-2 hover:bg-slate-100 md:hidden dark:hover:bg-slate-800" onClick={() => setMenuOpen((m) => !m)} aria-label="Toggle menu" aria-expanded={menuOpen}>☰</button>
         </div>
         <nav className={cx("flex-col gap-1 px-2 pb-4", menuOpen ? "flex" : "hidden md:flex")}>
           {NAV.map(([path, label]) => (
@@ -106,8 +106,8 @@ export default function ResearcherApp() {
             </NavLink>
           ))}
           <div className="mt-4 flex flex-col gap-1 border-t border-slate-200 pt-3 dark:border-slate-800">
-            <button className="rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-800" onClick={toggle}>{dark ? "☀ Light mode" : "☾ Dark mode"}</button>
-            <button className="rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-800" onClick={() => { setAdminToken(null); setAuthed(false); }}>Sign out</button>
+            <button className="rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-800" onClick={() => { toggle(); setMenuOpen(false); }}>{dark ? "☀ Light mode" : "☾ Dark mode"}</button>
+            <button className="rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-800" onClick={() => { setAdminToken(null); setAuthed(false); setMenuOpen(false); }}>Sign out</button>
           </div>
         </nav>
       </aside>
@@ -127,18 +127,19 @@ export default function ResearcherApp() {
           <Route path="*" element={<Navigate to="overview" replace />} />
         </Routes>
       </main>
+      <Toasts />
     </div>
   );
 }
 
 export function PageTitle({ title, subtitle, actions }: { title: string; subtitle?: string; actions?: ReactNode }) {
   return (
-    <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
-      <div>
+    <div className="mb-6 flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+      <div className="min-w-[16rem] flex-1">
         <h1 className="text-2xl font-bold">{title}</h1>
         {subtitle && <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">{subtitle}</p>}
       </div>
-      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+      {actions && <div className="flex flex-wrap items-center justify-end gap-2">{actions}</div>}
     </div>
   );
 }
@@ -160,8 +161,10 @@ export function useLoad<T>(fn: () => Promise<T>, deps: unknown[] = []): { data: 
   return { data, error, loading, reload: () => setN((x) => x + 1) };
 }
 
-export function fmtDate(s: string | null | undefined): string {
+/** Local date/time. Compact by default (fits in tables); `full` adds seconds (audit log). */
+export function fmtDate(s: string | null | undefined, full = false): string {
   if (!s) return "—";
   const d = new Date(s);
-  return isNaN(d.getTime()) ? s : d.toLocaleString();
+  if (isNaN(d.getTime())) return s;
+  return full ? d.toLocaleString() : d.toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
 }

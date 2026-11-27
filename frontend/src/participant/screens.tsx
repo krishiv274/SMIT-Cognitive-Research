@@ -1,6 +1,7 @@
 import { useState, type FormEvent, type ReactNode } from "react";
 import { Alert, Button, Field, GridIllustration, inputCls } from "../components/ui";
 import type { ExperimentConfig } from "../types";
+import type { DeviceCheckResult } from "./deviceCheck";
 
 export interface StudyInfo {
   title: string;
@@ -12,6 +13,8 @@ export interface StudyInfo {
   experiment_version: string | null;
   config: ExperimentConfig | null;
   settings: Record<string, string>;
+  /** false only when the server disables the computer check (automated tests). */
+  device_check_required?: boolean;
 }
 
 export function Shell({ children, pilot }: { children: ReactNode; pilot?: boolean }) {
@@ -56,7 +59,7 @@ export function Consent({ info, onAccept, onDecline }: { info: StudyInfo; onAcce
         <p><strong>This is a student research study</strong> conducted for a {s.course_name} course at {s.university_name}, {s.department}, supervised by {s.professor_name}.</p>
         <p><strong>Ethics status:</strong> {s.ethics_statement}</p>
         <p><strong>Purpose.</strong> We are studying how people remember the positions of shapes for a few seconds while doing other brief tasks. The results will be used for a course research report.</p>
-        <p><strong>What you will do.</strong> Provide your age, gender, academic course and email address; read instructions; complete 6 practice trials and 60 short trials in three blocks with breaks (about {info.estimated_minutes} minutes).</p>
+        <p><strong>What you will do.</strong> Provide your age, gender, academic course and email address; read instructions; complete {info.config ? `${info.config.trials.practice_per_condition * 3} practice trials and ${info.config.trials.trials_per_condition * 3}` : "a few practice trials and about 60"} short trials in three blocks with breaks (about {info.estimated_minutes} minutes).</p>
         <p><strong>Voluntary participation and withdrawal.</strong> Taking part is voluntary. You may stop at any time without giving a reason and without penalty (press Esc and tell the researcher). You can ask for your data to be deleted until {s.withdrawal_deadline} by quoting your participant ID.</p>
         <p><strong>Data collected.</strong> Age, gender, academic course, email address (stored separately), your responses and reaction times, and technical information about the browser and screen needed to check timing.</p>
         <p><strong>Confidentiality.</strong> Research data are identified only by a participant ID. Only the student researchers can access your email address; it is never included in reports, figures or presentations. {s.data_storage_statement} {s.retention_statement}</p>
@@ -138,7 +141,10 @@ export function Registration({ pilot, onSubmit, busy, serverError }: { pilot: bo
   );
 }
 
-export function Instructions({ config, participantId, pilot, onStart, refreshHz }: { config: ExperimentConfig; participantId: string; pilot: boolean; onStart: () => void; refreshHz: number | null }) {
+/** 500 → "0.5", 3000 → "3", 2500 → "2.5" (seconds, without misleading rounding). */
+const secs = (ms: number) => String(Math.round(ms / 100) / 10);
+
+export function Instructions({ config, participantId, pilot, onStart, refreshHz, busy = false, otherOpen = false }: { config: ExperimentConfig; participantId: string; pilot: boolean; onStart: () => void; refreshHz: number | null; busy?: boolean; otherOpen?: boolean }) {
   const t = config.timing;
   const K = (s: string) => s.toUpperCase();
   const memColor = config.grid.memory_highlight_color;
@@ -150,11 +156,11 @@ export function Instructions({ config, participantId, pilot, onStart, refreshHz 
       <h1 className="mt-1 text-2xl font-bold">Instructions</h1>
       <ol className="mt-5 space-y-6">
         <Step n={1} title="Look at the cross (+)">A cross appears in the middle of the screen. Keep your eyes on it — the grid is about to appear.</Step>
-        <Step n={2} title={`Memorise the blue pattern (${(t.memory_stimulus_ms / 1000).toFixed(1)} s)`}>
+        <Step n={2} title={`Memorise the blue pattern (${secs(t.memory_stimulus_ms)} s)`}>
           <p>A grid appears briefly. <strong>{config.grid.highlight_count} squares are blue.</strong> Remember <em>where</em> they are.</p>
           <div className="mt-3"><GridIllustration pattern={[0, 4, 5, 7]} color={memColor} label="Example memory pattern" /></div>
         </Step>
-        <Step n={3} title={`Middle phase (${(t.interference_ms / 1000).toFixed(0)} s) — depends on the block`}>
+        <Step n={3} title={`Middle phase (${secs(t.interference_ms)} s) — depends on the block`}>
           <ul className="list-disc space-y-2 pl-5">
             <li><strong>Hold:</strong> the screen is empty. Just keep the blue pattern in mind.</li>
             <li><strong>Equation:</strong> a sum such as <span className="font-mono">7 + 6 = 13</span> appears. Is it correct? <Key k={K(config.keys.secondary_true)} /> = True, <Key k={K(config.keys.secondary_false)} /> = False.</li>
@@ -170,7 +176,7 @@ export function Instructions({ config, participantId, pilot, onStart, refreshHz 
           </ul>
           <p className="mt-2 text-sm">Answer the middle task quickly and accurately. The middle phase always lasts the same time, even after you answer.</p>
         </Step>
-        <Step n={4} title={`Compare (answer within ${(t.recognition_deadline_ms / 1000).toFixed(0)} s)`}>
+        <Step n={4} title={`Compare (answer within ${secs(t.recognition_deadline_ms)} s)`}>
           <p>A second blue grid appears. Is it <strong>exactly the same</strong> as the first blue pattern? <Key k={K(config.keys.same)} /> = Same, <Key k={K(config.keys.different)} /> = Different.</p>
           <p className="mt-1 text-sm">If it is different, exactly <strong>one</strong> blue square has moved to a new place. There are always {config.grid.highlight_count} blue squares.</p>
           <div className="mt-3 flex flex-wrap gap-6">
@@ -184,8 +190,10 @@ export function Instructions({ config, participantId, pilot, onStart, refreshHz 
         Respond <strong>as quickly and as accurately as you can</strong>. Keep your left index finger on <Key k={K(config.keys.same)} /> and your right index finger on <Key k={K(config.keys.different)} />.
         You will first do {config.trials.practice_per_condition * 3} practice trials with feedback. The main task has 3 blocks with short breaks and no feedback.
       </Alert>
-      {refreshHz && <p className="mt-3 text-xs text-slate-500">Display check: about {refreshHz} Hz refresh rate detected.</p>}
-      <div className="mt-6 flex justify-end"><Button onClick={onStart}>Start practice (full screen)</Button></div>
+      {refreshHz && refreshHz >= 50 && <p className="mt-3 text-xs text-slate-500">Display check: about {refreshHz} Hz refresh rate detected.</p>}
+      {refreshHz && refreshHz < 50 && <div className="mt-3"><Alert kind="warn">Display check: only about {refreshHz} Hz was measured. This usually means the window was in the background or the computer is in power-saving mode. Keep this window in front and turn off Low Power Mode — it is checked again when you start.</Alert></div>}
+      {otherOpen && <div className="mt-3"><Alert kind="error"><strong>Another SMIT session is open in this browser.</strong> Only one session can receive key presses at a time. Close the other tab or window before starting.</Alert></div>}
+      <div className="mt-6 flex justify-end"><Button onClick={onStart} disabled={busy}>{busy ? "Checking display…" : "Start practice (full screen)"}</Button></div>
     </Shell>
   );
 }
@@ -208,6 +216,35 @@ export function Message({ title, children, pilot }: { title: string; children: R
     <Shell pilot={pilot}>
       <h1 className="text-2xl font-bold">{title}</h1>
       <div className="mt-4 space-y-3">{children}</div>
+    </Shell>
+  );
+}
+
+/** Shown when the page opens (and again before practice): the test does not start until every check passes. */
+export function DeviceCheckScreen({ result, checking, onRetry, pilot }: { result: DeviceCheckResult | null; checking: boolean; onRetry: () => void; pilot?: boolean }) {
+  return (
+    <Shell pilot={pilot}>
+      <h1 className="text-2xl font-bold">Computer check</h1>
+      <p className="mt-2 text-slate-700 dark:text-slate-300">
+        The test only runs on a <strong>MacBook</strong> in <strong>Google Chrome</strong> with <strong>power saving turned off</strong>, so that timing is accurate for everyone.
+      </p>
+      {!result ? (
+        <p className="mt-6 text-slate-600" data-testid="device-checking">Checking this computer… keep this window in front.</p>
+      ) : (
+        <>
+          <ul className="mt-5 space-y-3" data-testid="device-check-items">
+            {result.items.map((i) => (
+              <li key={i.id} className={`rounded-lg border px-4 py-3 ${i.ok ? "border-emerald-300 bg-emerald-50 text-emerald-950 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-100" : "border-red-300 bg-red-50 text-red-950 dark:border-red-800 dark:bg-red-950 dark:text-red-100"}`} data-check={i.id} data-ok={i.ok}>
+                <p className="font-semibold">{i.ok ? "✓" : "✗"} {i.label}</p>
+                <p className="mt-0.5 text-sm">{i.detail}</p>
+                {!i.ok && i.fix && <p className="mt-1 text-sm font-medium">{i.fix}</p>}
+              </li>
+            ))}
+          </ul>
+          {!result.ok && <div className="mt-5"><Alert kind="error"><strong>The test cannot start on this computer yet.</strong> Fix the items marked ✗, then press Check again. If you are unsure, ask the researcher.</Alert></div>}
+        </>
+      )}
+      <div className="mt-6 flex justify-end"><Button onClick={onRetry} disabled={checking}>{checking ? "Checking…" : "Check again"}</Button></div>
     </Shell>
   );
 }

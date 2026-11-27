@@ -97,9 +97,11 @@ def temporal_layout(path: Path, cfg: ExperimentConfig) -> Path:
     return path
 
 
-def task_flow(path: Path) -> Path:
-    steps = ["Welcome", "Informed\nconsent", "Registration\n(ID generated)", "Instructions\n+ refresh check", "Practice\n6 trials + feedback",
-             "Block 1\n20 trials", "Break\n≥ 20 s", "Block 2\n20 trials", "Break\n≥ 20 s", "Block 3\n20 trials", "Completion\n(ID, save check)"]
+def task_flow(path: Path, cfg: ExperimentConfig) -> Path:
+    tr, brk = cfg.trials, cfg.timing.break_min_s
+    n_prac, n_blk = 3 * tr.practice_per_condition, tr.trials_per_condition
+    steps = ["Welcome", "Informed\nconsent", "Registration\n(ID generated)", "Instructions\n+ refresh check", f"Practice\n{n_prac} trials\n+ feedback",
+             f"Block 1\n{n_blk} trials", f"Break\n≥ {brk:g} s", f"Block 2\n{n_blk} trials", f"Break\n≥ {brk:g} s", f"Block 3\n{n_blk} trials", "Completion\n(ID, save check)"]
     fig, ax = plt.subplots(figsize=(13, 2.6))
     w, gap = 1.0, 0.25
     for i, s in enumerate(steps):
@@ -124,4 +126,4 @@ def generate_all(out_dir: Path, cfg: ExperimentConfig) -> dict[str, Path]:
     out_dir.mkdir(parents=True, exist_ok=True)
     return {"stimuli": stimulus_examples(out_dir / "stimulus_sequence.png"),
             "temporal": temporal_layout(out_dir / "temporal_layout.png", cfg),
-            "flow": task_flow(out_dir / "task_flow.png")}
+            "flow": task_flow(out_dir / "task_flow.png", cfg)}

@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 
 from fastapi import HTTPException
+from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -21,8 +22,22 @@ def load_default_config() -> ExperimentConfig:
 def parse_config(data: dict) -> ExperimentConfig:
     try:
         return ExperimentConfig.model_validate(data)
-    except Exception as exc:  # pydantic ValidationError
+    except ValidationError as exc:
+        raise HTTPException(422, f"Invalid configuration: {format_validation_error(exc)}") from exc
+    except Exception as exc:
         raise HTTPException(422, f"Invalid configuration: {exc}") from exc
+
+
+def format_validation_error(exc: ValidationError) -> str:
+    """Turn a pydantic ValidationError into short, human-readable messages."""
+    parts = []
+    for err in exc.errors():
+        msg = err.get("msg", "")
+        if msg.startswith("Value error, "):
+            msg = msg[len("Value error, "):]
+        loc = ".".join(str(x) for x in err.get("loc", ()))
+        parts.append(f"{loc}: {msg}" if loc else msg)
+    return "; ".join(parts)
 
 
 def _next_version_number(db: Session) -> int:

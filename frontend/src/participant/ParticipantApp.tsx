@@ -5,8 +5,9 @@ import { Alert, Button } from "../components/ui";
 import { estimateRefreshRate } from "../engine/clock";
 import { UploadQueue, safeLocalStorage } from "../engine/uploadQueue";
 import type { ExperimentConfig, SessionStart, TrialPlan, TrialResult } from "../types";
-import ExperimentScreen, { type StartPoint } from "./ExperimentScreen";
-import { Consent, Instructions, Message, Registration, Welcome, type RegistrationValues, type StudyInfo } from "./screens";
+import ExperimentScreen, { type StartPoint, useOtherExperimentOpen } from "./ExperimentScreen";
+import { runDeviceCheck, summariseCheck, type DeviceCheckResult } from "./deviceCheck";
+import { Consent, DeviceCheckScreen, Instructions, Message, Registration, Welcome, type RegistrationValues, type StudyInfo } from "./screens";
 
 const ACTIVE_KEY = "smit_active_session";
 
@@ -17,10 +18,13 @@ interface ActiveSession {
   session_type: "main" | "pilot";
 }
 
-type Step = "loading" | "error" | "closed" | "resume_prompt" | "welcome" | "consent" | "declined" | "register" | "instructions" | "experiment" | "finishing" | "complete" | "withdrawn";
+type Step = "loading" | "error" | "closed" | "device_check" | "resume_prompt" | "welcome" | "consent" | "declined" | "register" | "instructions" | "experiment" | "finishing" | "complete" | "withdrawn";
 
-function deviceInfo(hz: number | null) {
+function deviceInfo(hz: number | null, check: DeviceCheckResult | null) {
   return {
+    charging: check?.facts.charging ?? null,
+    battery_level: check?.facts.batteryLevel ?? null,
+    device_check: check ? summariseCheck(check) : "not run",
     user_agent: navigator.userAgent.slice(0, 500),
     platform: (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData?.platform ?? navigator.platform,
     language: navigator.language,
@@ -50,6 +54,65 @@ export default function ParticipantApp() {
   const queueRef = useRef<UploadQueue | null>(null);
   const [pendingCount, setPendingCount] = useState(0);
   const [stored, setStored] = useState<ActiveSession | null>(null);
+  const otherOpen = useOtherExperimentOpen(step === "instructions");
+  const [measuring, setMeasuring] = useState(false);
+  const [check, setCheck] = useState<DeviceCheckResult | null>(null);
+  const [checking, setChecking] = useState(false);
+  const checkingRef = useRef(false);
+  const afterCheck = useRef<Step>("welcome");
+  const checkRequired = info?.device_check_required !== false;
+
+  /** Run the computer check; go on to `afterCheck` only if every item passes, otherwise stay on the check screen. */
+  const runCheck = useCallback(async (): Promise<DeviceCheckResult | null> => {
+    if (checkingRef.current) return null;
+    checkingRef.current = true;
+    setChecking(true);
+    try {
+      const r = await runDeviceCheck();
+      setCheck(r);
+      if (r.facts.windowFocused && r.facts.refreshHz) setRefresh({ hz: r.facts.refreshHz, frameMs: 1000 / r.facts.refreshHz });
+      setStep(r.ok ? afterCheck.current : "device_check");
+      return r;
+    } finally {
+      checkingRef.current = false;
+      setChecking(false);
+    }
+  }, []);
+
+  const gate = useCallback((next: Step) => {
+    afterCheck.current = next;
+    setCheck(null);
+    setStep("device_check");
+    void runCheck();
+  }, [runCheck]);
+
+  // While the check screen is up, check again automatically when the window comes back to the front.
+  useEffect(() => {
+    if (step !== "device_check") return;
+    const again = () => { void runCheck(); };
+    window.addEventListener("focus", again);
+    return () => window.removeEventListener("focus", again);
+  }, [step, runCheck]);
+
+  // The first refresh estimate runs while the page loads, possibly in a background tab where browsers throttle
+  // frames (e.g. 30 Hz instead of 120 Hz). Measure again when the participant starts, with the window in front —
+  // as part of a second computer check, since power saving may have switched on since the page opened.
+  const startExperiment = async () => {
+    if (checkRequired) {
+      afterCheck.current = "experiment";
+      setMeasuring(true);
+      try { await runCheck(); } finally { setMeasuring(false); }
+      return;
+    }
+    setMeasuring(true);
+    try {
+      const r = await estimateRefreshRate();
+      if (document.hasFocus() && !document.hidden) setRefresh({ hz: r.hz, frameMs: r.frameMs });
+    } finally {
+      setMeasuring(false);
+    }
+    setStep("experiment");
+  };
 
   const makeQueue = useCallback((sid: string, token: string) => {
     queueRef.current?.dispose();
@@ -74,16 +137,19 @@ export default function ParticipantApp() {
         try { active = JSON.parse(store.getItem(ACTIVE_KEY) || "null"); } catch { active = null; }
         // Only offer to resume a session of the same kind as this link (a pilot session must not
         // appear on the main-study link and vice versa). The other session stays stored.
-        if (active && active.session_type === st.mode) { setStored(active); setStep("resume_prompt"); return; }
-        if (st.mode === "main" && !st.main_study_open) { setStep("closed"); return; }
-        setStep("welcome");
+        const next: Step = active && active.session_type === st.mode ? "resume_prompt"
+          : st.mode === "main" && !st.main_study_open ? "closed" : "welcome";
+        if (next === "resume_prompt") setStored(active);
+        // The computer check comes before anything else (consent, registration, resuming).
+        if (next !== "closed" && st.device_check_required !== false) gate(next);
+        else setStep(next);
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
         setStep("error");
       }
     })();
     return () => { alive = false; };
-  }, [pilotToken, store]);
+  }, [pilotToken, store, gate]);
 
   const event = useCallback((ev: string, detail?: string) => {
     const s = session;
@@ -105,7 +171,7 @@ export default function ParticipantApp() {
         email: v.email.trim() || null,
         session_type: info.mode,
         pilot_token: pilotToken,
-        device: deviceInfo(hz),
+        device: deviceInfo(hz, check),
       });
       store.setItem(ACTIVE_KEY, JSON.stringify({ session_id: res.session_id, session_token: res.session_token, participant_id: res.participant_id, session_type: res.session_type }));
       makeQueue(res.session_id, res.session_token);
@@ -145,7 +211,9 @@ export default function ParticipantApp() {
         if (!found) { await finish(s); return; }
         request("POST", `/api/public/sessions/${r.session_id}/events`, { event: "interrupted", detail: "browser closed or reloaded; session resumed" }, { "X-Session-Token": stored.session_token }).catch(() => undefined);
         setStart(found);
-        setStep("experiment");
+        // Check the computer again before continuing (power saving may have switched on meanwhile).
+        if (checkRequired) gate("experiment");
+        else setStep("experiment");
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -210,6 +278,8 @@ export default function ParticipantApp() {
       return <Message title="Loading…">Preparing the study…</Message>;
     case "error":
       return <Message title="Cannot start the study"><Alert kind="error">{error}</Alert><p>Please ask the researcher for help.</p></Message>;
+    case "device_check":
+      return <DeviceCheckScreen result={check} checking={checking} onRetry={() => void runCheck()} pilot={pilot} />;
     case "closed":
       return <Message title="The study is not open yet">The researcher has not yet finalised (locked) the experiment configuration. Please ask the researcher.</Message>;
     case "resume_prompt":
@@ -233,7 +303,7 @@ export default function ParticipantApp() {
     case "register":
       return <Registration pilot={pilot} onSubmit={register} busy={busy} serverError={error} />;
     case "instructions":
-      return session && <Instructions config={session.config} participantId={session.participant_id} pilot={session.session_type === "pilot"} refreshHz={refresh?.hz ?? null} onStart={() => setStep("experiment")} />;
+      return session && <Instructions config={session.config} participantId={session.participant_id} pilot={session.session_type === "pilot"} refreshHz={refresh?.hz ?? null} onStart={() => void startExperiment()} busy={measuring} otherOpen={otherOpen} />;
     case "experiment":
       if (!session || !queueRef.current) return null;
       return (

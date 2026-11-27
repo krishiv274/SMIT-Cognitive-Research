@@ -80,7 +80,8 @@ def title_page(doc: Document, settings: dict, final: bool, results: dict | None)
     doc.add(Table(["Item", "Details"], rows, widths=[1, 3]), PageBreak())
 
 
-def abstract(doc: Document, results: dict | None, final: bool) -> None:
+def abstract(doc: Document, cfg: ExperimentConfig, results: dict | None, final: bool) -> None:
+    tr = cfg.trials
     doc.h("Abstract", 1)
     obj = ("**Objective.** This study examined how numerical (arithmetic verification) and visual (spatial symmetry judgement) "
            "interference during the retention interval affect spatial working-memory recognition accuracy and reaction time in "
@@ -88,7 +89,8 @@ def abstract(doc: Document, results: dict | None, final: bool) -> None:
     meth = ("**Method.** In a within-subjects design, participants memorised four highlighted cells in a 3×3 grid (500 ms), "
             "performed no task (control), an arithmetic verification or a symmetry judgement during a 3,000 ms interference phase, "
             "and after a further 1,000 ms decided whether a probe grid was identical to the memorised pattern. Each participant "
-            "completed 60 experimental trials (20 per condition) in a fully counterbalanced block order.")
+            f"completed {3 * tr.trials_per_condition} experimental trials ({tr.trials_per_condition} per condition) "
+            "in a fully counterbalanced block order.")
     if not final or not results:
         doc.add(Para(obj), Para(meth), Para("**Results and conclusion.** " + PENDING, "pending"))
         return
@@ -109,7 +111,7 @@ def abstract(doc: Document, results: dict | None, final: bool) -> None:
     doc.add(Para(obj), Para(meth), *[Para(x) for x in parts])
 
 
-def methodology(doc: Document, cfg: ExperimentConfig, settings: dict, results: dict | None) -> None:
+def methodology(doc: Document, cfg: ExperimentConfig, settings: dict, results: dict | None, stimdir: Path) -> None:
     t, tr = cfg.timing, cfg.trials
     doc.h("Methodology", 1)
     doc.h("Experimental design", 2)
@@ -156,8 +158,8 @@ def methodology(doc: Document, cfg: ExperimentConfig, settings: dict, results: d
         ["ITI", f"{t.iti_min_ms}–{t.iti_max_ms} ms (uniform jitter)", "—"],
         ["ISI memory → probe", f"{isi} ms", "—"], ["SOA memory → probe", f"{t.memory_stimulus_ms + isi} ms", "—"],
     ], caption="Table 2. Trial timing (configuration " + cfg.name + ")"))
-    doc.add(Figure(REPO_ROOT / "experiment/stimuli/temporal_layout.png", "Figure M1. Temporal layout of a trial."),
-            Figure(REPO_ROOT / "experiment/stimuli/stimulus_sequence.png", "Figure M2. Stimulus illustrations for each phase and condition."))
+    doc.add(Figure(stimdir / "temporal_layout.png", "Figure M1. Temporal layout of a trial."),
+            Figure(stimdir / "stimulus_sequence.png", "Figure M2. Stimulus illustrations for each phase and condition."))
     doc.h("Procedure and counterbalancing", 2)
     doc.p(f"After consent and registration, participants read illustrated instructions and completed {3 * tr.practice_per_condition} practice "
           f"trials with feedback (repeatable up to {tr.max_practice_repeats} times), followed by three blocks of {tr.trials_per_condition} trials "
@@ -165,7 +167,7 @@ def methodology(doc: Document, cfg: ExperimentConfig, settings: dict, results: d
           f"({round(tr.trials_per_condition * tr.same_proportion)} each) and randomly ordered with at most {tr.max_same_answer_run} consecutive "
           "identical answers. No memory pattern was repeated within a session. Block order was assigned with a persistent least-used rule "
           "over all six orders; each session's random seed and full trial plan were stored for reproducibility.")
-    doc.add(Figure(REPO_ROOT / "experiment/stimuli/task_flow.png", "Figure M3. Participant task flow."))
+    doc.add(Figure(stimdir / "task_flow.png", "Figure M3. Participant task flow."))
     doc.h("Variables", 2)
     doc.add(Table(["Role", "Variable"], [
         ["Independent variable", "Interference condition (A control, B numerical, C visual), within subjects"],
@@ -504,7 +506,10 @@ def appendices(doc: Document, cfg: ExperimentConfig, results: dict | None, versi
 
 # ---------------------------------------------------------------------------
 
-def build(cfg: ExperimentConfig, settings: dict, results: dict | None, figdir: Path | None, version: str | None) -> tuple[Document, bool]:
+def build(cfg: ExperimentConfig, settings: dict, results: dict | None, figdir: Path | None, version: str | None,
+          stimdir: Path | None = None) -> tuple[Document, bool]:
+    """`stimdir` holds the design figures drawn for this configuration (default: experiment/stimuli)."""
+    stimdir = stimdir or REPO_ROOT / "experiment" / "stimuli"
     final = bool(results and results["meta"]["status"] == "ok")
     synthetic = bool(results and any(str(p.get("participant_id", "")).upper().startswith("SYN")
                                      for p in results.get("participant_summary", [])))
@@ -513,7 +518,7 @@ def build(cfg: ExperimentConfig, settings: dict, results: dict | None, figdir: P
         watermark = "SYNTHETIC TEST DATA — SOFTWARE VERIFICATION ONLY — NOT RESEARCH FINDINGS"
     doc = Document(f"SMIT Research Report — {'SYNTHETIC TEST' if synthetic else 'FINAL' if final else 'PRELIMINARY'}", watermark=watermark)
     title_page(doc, settings, final, results if final else None)
-    abstract(doc, results, final)
+    abstract(doc, cfg, results, final)
     doc.h("Introduction", 1)
     doc.p("Spatial working memory allows us to hold the layout of objects in mind for a few seconds — for example, remembering where "
           "items are on a map or a whiteboard while doing something else. Everyday life rarely allows undisturbed rehearsal: people "
@@ -529,7 +534,7 @@ def build(cfg: ExperimentConfig, settings: dict, results: dict | None, figdir: P
     doc.add(_md("Theoretical_Framework.md", base_level=2))
     doc.h("Research Questions and Hypotheses", 1)
     doc.add(_md("Research_Question_and_Hypotheses.md", base_level=2))
-    methodology(doc, cfg, settings, results if final else None)
+    methodology(doc, cfg, settings, results if final else None, stimdir)
     cognitive_task_design(doc)
     pilot_section(doc, settings)
     results_section(doc, results if final else results, figdir if final else None)

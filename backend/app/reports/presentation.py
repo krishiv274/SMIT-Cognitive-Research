@@ -70,10 +70,12 @@ class Deck:
         return s
 
 
-def build_presentation(path: Path, cfg: ExperimentConfig, settings: dict, results: dict | None, figdir: Path | None) -> Path:
+def build_presentation(path: Path, cfg: ExperimentConfig, settings: dict, results: dict | None, figdir: Path | None,
+                       stimdir: Path | None = None) -> Path:
     final = bool(results and results["meta"]["status"] == "ok")
-    t = cfg.timing
-    stim = REPO_ROOT / "experiment" / "stimuli"
+    t, tr = cfg.timing, cfg.trials
+    n_same = round(tr.trials_per_condition * tr.same_proportion)
+    stim = stimdir or REPO_ROOT / "experiment" / "stimuli"
     d = Deck()
     s = d.slide("SMIT — Spatial Memory Interference Task", [TITLE, f"{settings.get('student_names', '')}",
                 f"{settings.get('course_name', '')} · {settings.get('university_name', '')}",
@@ -93,7 +95,7 @@ def build_presentation(path: Path, cfg: ExperimentConfig, settings: dict, result
             "Selective interference (Logie et al., 1990): compare content of secondary tasks",
             "Multi-component model (Baddeley & Hitch, 1974); embedded processes (Cowan, 2001)"])
     d.slide("5. The proposed cognitive task", ["3×3 grid, 4 blue cells, 500 ms", "3 s interference phase: none / arithmetic / symmetry",
-            "1 s retention, then probe: same or one cell moved (F/J)", "60 trials, 20 per condition, 10 same + 10 different"], stim / "stimulus_sequence.png")
+            "1 s retention, then probe: same or one cell moved (F/J)", f"{3 * tr.trials_per_condition} trials, {tr.trials_per_condition} per condition, {n_same} same + {tr.trials_per_condition - n_same} different"], stim / "stimulus_sequence.png")
     d.slide("6. Goals, cues, mental model, cognitive demands", ["Goal: correct same/different decision; subgoals per phase (encode, maintain, verify, compare)",
             "Cues: fixation cross, blue vs orange colour coding, key reminders", "Mental model: 'only blue matters, exactly one square moves, F = same/true'",
             "Demands: consolidation, maintenance under load, interference resistance, response selection under a deadline"],

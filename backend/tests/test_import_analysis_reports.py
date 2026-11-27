@@ -219,3 +219,23 @@ def test_report_and_presentation_generation(client, admin_headers, syn_xlsx, art
     assert client.get("/api/admin/reports/999/files/x.pdf", headers=admin_headers).status_code == 404
     assert client.get("/api/admin/templates/../backend/app/main.py", headers=admin_headers).status_code == 404
     assert client.get("/api/admin/templates/SMIT_Data_Collection_Template.xlsx", headers=admin_headers).status_code == 200
+
+
+def test_reports_use_their_own_design_figures(client, admin_headers):
+    """Generating a report or slides must not overwrite the shared figures in experiment/stimuli, and the
+    trial counts in the text must come from the configuration (not the 20-per-condition specification)."""
+    import hashlib
+
+    from app.settings import REPO_ROOT
+
+    stim = REPO_ROOT / "experiment" / "stimuli"
+    before = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(stim.glob("*.png"))}
+    rep = client.post("/api/admin/reports/generate", headers=admin_headers).json()
+    client.post("/api/admin/reports/presentation", headers=admin_headers)
+    after = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(stim.glob("*.png"))}
+    assert before == after
+    cfg = client.get("/api/admin/configs", headers=admin_headers).json()
+    used = next((c for c in cfg if c["is_active_main"]), cfg[0])["config"]["trials"]["trials_per_condition"]
+    name = next(f["name"] for f in rep["files"] if f["label"] == "HTML")
+    html = client.get(f"/api/admin/reports/{rep['id']}/files/{name}", headers=admin_headers).text
+    assert f"{3 * used} experimental trials ({used} per condition)" in html

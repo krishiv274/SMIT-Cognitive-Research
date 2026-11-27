@@ -166,6 +166,20 @@ describe("focus loss and practice feedback", () => {
     expect(res.focus_loss).toBe(true);
   });
 
+  it("flags focus loss for a window that never had focus (no blur event)", async () => {
+    const run = async (focused: boolean) => {
+      const clock = new FakeClock(1000 / 60);
+      const runner = new TrialRunner(makeTrial(), cfg, new RecordingRenderer(), clock, { practice: false, frameMs: 1000 / 60, refreshHz: 60, isFocused: () => focused });
+      let done: TrialResult | null = null;
+      runner.run().then((r) => { done = r; });
+      for (let i = 0; i < 2000 && !done; i++) { clock.tick(); await Promise.resolve(); }
+      await Promise.resolve();
+      return done as unknown as TrialResult;
+    };
+    expect((await run(false)).focus_loss).toBe(true);
+    expect((await run(true)).focus_loss).toBe(false);
+  });
+
   it("shows feedback only on practice trials", async () => {
     const p = await simulate(makeTrial({ practice: true }), 60, undefined, true);
     expect(p.renderer.log.some((l) => l.startsWith("feedback:Too slow"))).toBe(true);

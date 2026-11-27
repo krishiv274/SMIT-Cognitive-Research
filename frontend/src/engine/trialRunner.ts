@@ -36,6 +36,9 @@ export interface TrialRunnerOptions {
   refreshHz: number;
   /** Optional observer (e.g. sets a data attribute for automated tests). Must be cheap. */
   onPhase?: (phase: string) => void;
+  /** Returns false when the experiment window does not have keyboard focus (checked every frame). A window
+   *  that never had focus fires no blur event, so focus must be polled rather than only listened for. */
+  isFocused?: () => boolean;
 }
 
 export function buildPhases(trial: PlanTrial, cfg: ExperimentConfig, practice: boolean): Phase[] {
@@ -193,7 +196,7 @@ export class TrialRunner {
     lines.push({ text: `The pattern was ${this.trial.correct_answer === "same" ? "the SAME" : "DIFFERENT (one square moved)"}.`, color: "#000000" });
     const s = this.trial.interference;
     if (s) {
-      const task = this.trial.condition === "B" ? "Equation" : "Symmetry";
+      const task = this.trial.condition === "B" ? "Equation" : this.cfg.secondary_tasks.visual.probe === "symmetry" ? "Symmetry" : "Centre square";
       if (this.secondaryResponse === null) lines.push({ text: `${task}: no answer — please answer during the middle phase.`, color: "#7a3d00" });
       else lines.push({ text: `${task}: ${this.secondaryResponse === s.correct ? "correct" : "incorrect"}`, color: "#000000" });
     }
@@ -209,6 +212,7 @@ export class TrialRunner {
     }
     this.lastTs = ts;
     if (this.trialStart === null) this.trialStart = ts;
+    if (!this.focusLoss && this.opts.isFocused && !this.opts.isFocused()) this.focusLoss = true;
 
     if (this.awaitingOnset) {
       this.onsets[this.phases[this.idx].name] = ts;
