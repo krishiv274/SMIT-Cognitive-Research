@@ -248,16 +248,37 @@ def make_all(out_dir: Path, inc: pd.DataFrame, ct: pd.DataFrame, results: dict, 
     # 15 demographics
     if n >= 1:
         fig, axes = plt.subplots(1, 3, figsize=(12, 3.6))
-        ages = _num(inc["age"]).dropna()
-        if len(ages):
-            axes[0].hist(ages, bins=range(int(ages.min()), int(ages.max()) + 2), color="#56B4E9", edgecolor="white")
-        axes[0].set_xlabel("Age (years)"); axes[0].set_ylabel("Participants"); axes[0].set_title(f"Age (n = {len(ages)})")
+        from matplotlib.ticker import MaxNLocator
+
+        # Ages are whole years: one bar centred on each age, eligible participants stacked with excluded
+        # main-study participants (hatched) so the full registered sample is visible, not just the analysed one.
+        ages = _num(inc["age"]).dropna().round().astype(int)
+        allp = pd.DataFrame(results.get("participant_summary") or [])
+        ex_ages = (_num(allp.loc[allp["excluded"].astype(bool), "age"]).dropna().round().astype(int)
+                   if len(allp) and {"age", "excluded"} <= set(allp.columns) else pd.Series(dtype=int))
+        if len(ages) or len(ex_ages):
+            lo, hi = int(min(ages.min() if len(ages) else 999, ex_ages.min() if len(ex_ages) else 999)), \
+                int(max(ages.max() if len(ages) else 0, ex_ages.max() if len(ex_ages) else 0))
+            xs = np.arange(lo, hi + 1)
+            inc_c = ages.value_counts().reindex(xs, fill_value=0).values
+            ex_c = ex_ages.value_counts().reindex(xs, fill_value=0).values
+            axes[0].bar(xs, inc_c, width=0.8, color="#56B4E9", edgecolor="white", label=f"Eligible (n = {len(ages)})")
+            if len(ex_ages):
+                axes[0].bar(xs, ex_c, width=0.8, bottom=inc_c, color="white", edgecolor="#56B4E9", hatch="///",
+                            label=f"Excluded (n = {len(ex_ages)})")
+                axes[0].legend(fontsize=7, frameon=False)
+            axes[0].set_xticks(xs)
+            axes[0].set_xlim(lo - 0.6, hi + 0.6)
+        axes[0].yaxis.set_major_locator(MaxNLocator(integer=True))
+        axes[0].set_xlabel("Age (years)"); axes[0].set_ylabel("Participants")
+        axes[0].set_title(f"Age (eligible n = {len(ages)}" + (f", excluded n = {len(ex_ages)})" if len(ex_ages) else ")"))
         for ax, var, lab in ((axes[1], "gender", "Gender"), (axes[2], "academic_course", "Academic course")):
             vc = inc[var].fillna("Missing").value_counts()
-            ax.barh(vc.index.astype(str), vc.values, color="#CC79A7")
+            ax.barh(vc.index.astype(str), vc.values, height=0.6, color="#CC79A7")
+            ax.xaxis.set_major_locator(MaxNLocator(integer=True))
             ax.set_xlabel("Participants"); ax.set_title(lab)
             ax.tick_params(axis="y", labelsize=8)
-        fig.suptitle(f"Participant demographics (eligible participants, N = {n})")
+        fig.suptitle(f"Participant demographics (eligible participants, N = {n}; excluded shown hatched in the age panel)")
         fs.save(fig, "15_demographics", "Participant demographic distributions", n)
 
     # 16 learning / fatigue
